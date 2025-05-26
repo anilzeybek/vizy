@@ -41,11 +41,6 @@ def _to_numpy(x: Any) -> np.ndarray:
     return x
 
 
-def _squeeze(arr: np.ndarray) -> np.ndarray:
-    """Remove singleton dimensions."""
-    return np.squeeze(arr)
-
-
 def _to_hwc(arr: np.ndarray) -> np.ndarray:
     """Ensure array is HxW or HxWxC where C in {1,3}."""
     if arr.ndim == 2:  # already HxW
@@ -59,7 +54,7 @@ def _to_hwc(arr: np.ndarray) -> np.ndarray:
 
 
 def _prep(arr: np.ndarray) -> np.ndarray:
-    arr = _squeeze(arr)
+    arr = arr.squeeze()
     if arr.ndim in (2, 3):
         return _to_hwc(arr)
     if arr.ndim == 4:
