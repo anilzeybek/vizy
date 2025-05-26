@@ -71,11 +71,26 @@ def _prep(arr: np.ndarray) -> np.ndarray:
 def _make_grid(bchw: np.ndarray) -> np.ndarray:
     """Make grid image from BxCxHxW array."""
     b, c, h, w = bchw.shape
-    grid_size = math.ceil(math.sqrt(b))
+
+    # Create a more compact grid layout
+    # For small batch sizes, prefer horizontal layout, except for 4 images (2x2)
+    if b == 1:
+        grid_cols, grid_rows = 1, 1
+    elif b == 2:
+        grid_cols, grid_rows = 2, 1  # side by side
+    elif b == 3:
+        grid_cols, grid_rows = 3, 1  # all in a row
+    elif b == 4:
+        grid_cols, grid_rows = 2, 2  # 2x2 grid
+    else:
+        # For larger batches, use a more square-like layout
+        grid_cols = math.ceil(math.sqrt(b))
+        grid_rows = math.ceil(b / grid_cols)
+
     # canvas initialised to zeros (black background)
-    canvas = np.zeros((h * grid_size, w * grid_size, c), dtype=bchw.dtype)
+    canvas = np.zeros((h * grid_rows, w * grid_cols, c), dtype=bchw.dtype)
     for idx in range(b):
-        row, col = divmod(idx, grid_size)
+        row, col = divmod(idx, grid_cols)
         img = _to_hwc(bchw[idx])
         canvas[row * h : (row + 1) * h, col * w : (col + 1) * w, :] = img
     return canvas
