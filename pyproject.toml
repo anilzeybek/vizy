@@ -1,0 +1,45 @@
+[project]
+name = "vizy"
+version = "0.1.0"
+description = "Tiny tensor visualiser: vz.plot(t) / vz.save(t)"
+authors = [{name = "Anıl Zeybek"}]
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+keywords = ["tensor", "visualization", "pytorch", "numpy", "matplotlib"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Visualization",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "matplotlib>=3.5.0",
+    "numpy>=1.20.0",
+]
+
+[project.optional-dependencies]
+torch = ["torch"]
+
+[project.urls]
+Homepage = "https://github.com/anilzeybek/vizy"
+Repository = "https://github.com/anilzeybek/vizy"
+Issues = "https://github.com/anilzeybek/vizy/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.11.11",
+]
