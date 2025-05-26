@@ -117,6 +117,7 @@ def plot(tensor: Any, **imshow_kwargs) -> plt.Figure:
         ax.imshow(arr, **imshow_kwargs)
     ax.axis("off")
     fig.tight_layout()
+    plt.show()
     return fig
 
 
