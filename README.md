@@ -23,6 +23,3 @@ Supports tensors or arrays with shape like:
 ```bash
 pip install vizy
 ```
-
----
-MIT licensed. Developed by Anıl Zeybek.
