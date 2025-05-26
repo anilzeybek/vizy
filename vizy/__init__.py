@@ -115,6 +115,20 @@ def _prepare_for_display(arr: np.ndarray) -> np.ndarray:
     return arr
 
 
+def _create_figure(tensor: Any, **imshow_kwargs) -> plt.Figure:
+    """Create a matplotlib figure from tensor."""
+    arr = _to_numpy(tensor)
+    arr = _prepare_for_display(arr)
+    fig, ax = plt.subplots()
+    if arr.ndim == 2 or arr.shape[2] == 1:
+        ax.imshow(arr.squeeze(), cmap="gray", **imshow_kwargs)
+    else:
+        ax.imshow(arr, **imshow_kwargs)
+    ax.axis("off")
+    fig.tight_layout()
+    return fig
+
+
 def plot(tensor: Any, **imshow_kwargs) -> plt.Figure:
     """
     Display *tensor* using Matplotlib.
@@ -130,17 +144,8 @@ def plot(tensor: Any, **imshow_kwargs) -> plt.Figure:
     -------
     matplotlib.figure.Figure
     """
-    arr = _to_numpy(tensor)
-    arr = _prepare_for_display(arr)
-    fig, ax = plt.subplots()
-    if arr.ndim == 2 or arr.shape[2] == 1:
-        ax.imshow(arr.squeeze(), cmap="gray", **imshow_kwargs)
-    else:
-        ax.imshow(arr, **imshow_kwargs)
-    ax.axis("off")
-    fig.tight_layout()
+    _create_figure(tensor, **imshow_kwargs)
     plt.show()
-    return fig
 
 
 def save(path_or_tensor: Any, tensor: Any | None = None, **imshow_kwargs) -> str:
@@ -167,7 +172,7 @@ def save(path_or_tensor: Any, tensor: Any | None = None, **imshow_kwargs) -> str
     else:
         path = path_or_tensor  # type: ignore[assignment]
 
-    fig = plot(tensor, **imshow_kwargs)
+    fig = _create_figure(tensor, **imshow_kwargs)
 
     if path is None:
         fd, path = tempfile.mkstemp(suffix=".png", prefix="vz_")
