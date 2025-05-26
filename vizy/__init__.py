@@ -81,10 +81,22 @@ def _make_grid(bchw: np.ndarray) -> np.ndarray:
     return canvas
 
 
+def _convert_float_to_int(arr: np.ndarray) -> np.ndarray:
+    """Convert float arrays with values in 0-255 range to uint8."""
+    if arr.dtype.kind == "f":  # float type
+        arr_min, arr_max = arr.min(), arr.max()
+        # Only convert if values are clearly in 0-255 range, not 0-1 range
+        # We check if max > 1.5 to distinguish from normalized 0-1 arrays
+        if arr_min >= -0.5 and arr_max > 1.5 and arr_max <= 255.5:
+            return np.clip(np.round(arr), 0, 255).astype(np.uint8)
+    return arr
+
+
 def _prepare_for_display(arr: np.ndarray) -> np.ndarray:
     arr = _prep(arr)
     if arr.ndim == 4:
         arr = _make_grid(arr)
+    arr = _convert_float_to_int(arr)
     return arr
 
 
