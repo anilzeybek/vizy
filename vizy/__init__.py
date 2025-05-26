@@ -175,9 +175,9 @@ def save(path_or_tensor: Any, tensor: Any | None = None, **imshow_kwargs) -> str
     fig = _create_figure(tensor, **imshow_kwargs)
 
     if path is None:
-        fd, path = tempfile.mkstemp(suffix=".png", prefix="vz_")
+        fd, path = tempfile.mkstemp(suffix=".png", prefix="vizy-")
         os.close(fd)
     fig.savefig(path, bbox_inches="tight")
     plt.close(fig)
-    print(f"Saved image to {path}")
+    print(path)
     return path
