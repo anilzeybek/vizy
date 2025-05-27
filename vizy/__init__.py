@@ -28,7 +28,7 @@ try:
 except ModuleNotFoundError:  # pragma: no cover
     torch = None  # type: ignore
 
-__all__: Sequence[str] = ("plot", "save")
+__all__: Sequence[str] = ("plot", "save", "summary")
 __version__: str = "0.1.0"
 
 
@@ -188,3 +188,45 @@ def save(path_or_tensor: Any, tensor: Any | None = None, **imshow_kwargs) -> str
     plt.close(fig)
     print(path)
     return path
+
+
+def summary(tensor: Any) -> None:
+    """
+    Print summary information about a tensor or array.
+
+    Parameters
+    ----------
+    tensor : torch.Tensor | np.ndarray
+        Tensor or array to summarize.
+    """
+    # Determine the original type
+    if torch is not None and isinstance(tensor, torch.Tensor):
+        array_type = "torch.Tensor"
+        device_info = f" (device: {tensor.device})" if hasattr(tensor, 'device') else ""
+        # Convert to numpy for analysis but keep original for type info
+        arr = tensor.detach().cpu().numpy()
+        dtype_str = str(tensor.dtype)
+    elif isinstance(tensor, np.ndarray):
+        array_type = "numpy.ndarray"
+        device_info = ""
+        arr = tensor
+        dtype_str = str(tensor.dtype)
+    else:
+        raise TypeError("Expected torch.Tensor | np.ndarray")
+    
+    # Basic info
+    print(f"Type: {array_type}{device_info}")
+    print(f"Shape: {arr.shape}")
+    print(f"Dtype: {dtype_str}")
+    
+    # Range (min - max)
+    if arr.size > 0:  # Only if array is not empty
+        arr_min, arr_max = arr.min(), arr.max()
+        print(f"Range: {arr_min} - {arr_max}")
+        
+        # Number of unique values for integer dtypes
+        if arr.dtype.kind in ('i', 'u'):  # signed or unsigned integer
+            unique_count = len(np.unique(arr))
+            print(f"Number of unique values: {unique_count}")
+    else:
+        print("Range: N/A (empty array)")
