@@ -119,13 +119,20 @@ def _create_figure(tensor: Any, **imshow_kwargs) -> plt.Figure:
     """Create a matplotlib figure from tensor."""
     arr = _to_numpy(tensor)
     arr = _prepare_for_display(arr)
-    fig, ax = plt.subplots()
+
+    # Set figure size to match exact pixel dimensions
+    h, w = arr.shape[:2]
+    dpi = 100
+    fig, ax = plt.subplots(figsize=(w / dpi, h / dpi), dpi=dpi)
+
     if arr.ndim == 2 or arr.shape[2] == 1:
         ax.imshow(arr.squeeze(), cmap="gray", **imshow_kwargs)
     else:
         ax.imshow(arr, **imshow_kwargs)
     ax.axis("off")
-    fig.tight_layout()
+
+    # Remove all padding to ensure exact pixel dimensions
+    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
     return fig
 
 
@@ -177,7 +184,7 @@ def save(path_or_tensor: Any, tensor: Any | None = None, **imshow_kwargs) -> str
     if path is None:
         fd, path = tempfile.mkstemp(suffix=".png", prefix="vizy-")
         os.close(fd)
-    fig.savefig(path, bbox_inches="tight")
+    fig.savefig(path, bbox_inches=None, pad_inches=0)
     plt.close(fig)
     print(path)
     return path
