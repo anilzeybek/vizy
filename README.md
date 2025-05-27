@@ -10,6 +10,7 @@ import vizy
 vizy.plot(tensor)               # shows image or grid
 vizy.save("image.png", tensor)  # saves to file
 vizy.save(tensor)               # saves to temp file and prints path
+vizy.summary(tensor)            # prints info like res, dtype, device, range, etc.
 ```
 
 Supports tensors or arrays with shape like:
