@@ -20,8 +20,8 @@ import os
 import tempfile
 from typing import Any, Sequence
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 try:
     import torch  # type: ignore
@@ -54,6 +54,12 @@ def _to_hwc(arr: np.ndarray) -> np.ndarray:
 
 
 def _prep(arr: np.ndarray) -> np.ndarray:
+    """Prepare array for visualization by:
+    - Squeezing singleton dimensions
+    - Converting 2D/3D arrays to HWC format using _to_hwc
+    - Ensuring 4D arrays are in BCHW format
+    - Raising error for unsupported shapes
+    """
     arr = arr.squeeze()
     if arr.ndim in (2, 3):
         return _to_hwc(arr)
@@ -69,7 +75,16 @@ def _prep(arr: np.ndarray) -> np.ndarray:
 
 
 def _make_grid(bchw: np.ndarray) -> np.ndarray:
-    """Make grid image from BxCxHxW array."""
+    """Make grid image from BxCxHxW array.
+    
+    Arranges multiple images in a grid layout with the following properties:
+    - Single image remains unchanged
+    - 2-3 images arranged horizontally in a row
+    - 4 images arranged in a 2x2 grid
+    - Larger batches arranged in a roughly square grid
+    - Maintains original image dimensions and channels
+    - Uses black background for empty grid positions
+    """
     b, c, h, w = bchw.shape
 
     # Create a more compact grid layout
