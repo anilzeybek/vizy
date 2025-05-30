@@ -180,24 +180,91 @@ def smart_4d_format_detection(arr: np.ndarray) -> str:
     cbhw_avg_corr = np.mean(cbhw_correlations) if cbhw_correlations else 0
 
     # Decision logic:
-    # If CBHW interpretation shows high correlation (same channel across batch items with variations)
-    # and BCHW shows lower correlation, prefer CBHW
     cbhw_score = 0
     bchw_score = 0
 
-    # High correlation within same channel across batch items suggests CBHW
-    if cbhw_avg_corr > bchw_avg_corr + 0.1:  # Significantly higher
+    # Heuristic 1: Correlation difference
+    corr_diff = cbhw_avg_corr - bchw_avg_corr
+    if corr_diff > 0.05:  # CBHW significantly higher
         cbhw_score += 2
-    elif cbhw_avg_corr > 0.8:  # Very high correlation suggests same channel
-        cbhw_score += 2
-    elif cbhw_avg_corr > 0.6:
-        cbhw_score += 1
+    elif corr_diff < -0.05:  # BCHW significantly higher
+        bchw_score += 2
+    else:
+        # Correlations are close - use other heuristics
 
-    # Moderate correlation within RGB channels suggests BCHW
-    if bchw_avg_corr > 0.3 and bchw_avg_corr < 0.8:
+        # Heuristic 2: Very high CBHW correlation suggests same channel across batch
+        if cbhw_avg_corr > 0.95:
+            cbhw_score += 2
+        elif cbhw_avg_corr > 0.85:
+            cbhw_score += 1
+
+        # Heuristic 3: Moderate BCHW correlation suggests RGB channels
+        if 0.4 < bchw_avg_corr < 0.9:
+            bchw_score += 1
+
+    # Heuristic 4: Statistical consistency check
+    # For CBHW: each channel should have similar statistics across batch items
+    cbhw_consistency = 0
+    for c in range(3):
+        channel_means = [arr[c, b].mean() for b in range(3)]
+        channel_stds = [arr[c, b].std() for b in range(3)]
+
+        # Check consistency of means and stds within this channel
+        if np.mean(channel_means) > 0:
+            mean_cv = np.std(channel_means) / np.mean(channel_means)
+            cbhw_consistency += max(0, 1 - mean_cv)  # Lower CV = higher consistency
+
+        if np.mean(channel_stds) > 0:
+            std_cv = np.std(channel_stds) / np.mean(channel_stds)
+            cbhw_consistency += max(0, 1 - std_cv)
+
+    # For BCHW: each batch should have similar RGB statistics
+    bchw_consistency = 0
+    for b in range(3):
+        batch_stds = [arr[b, c].std() for c in range(3)]
+
+        # RGB images often have different means across channels, so don't penalize that
+        # But stds should be somewhat similar
+        if np.mean(batch_stds) > 0:
+            std_cv = np.std(batch_stds) / np.mean(batch_stds)
+            bchw_consistency += max(0, 1 - std_cv)
+
+    # Apply consistency scores
+    if cbhw_consistency > bchw_consistency + 0.5:
+        cbhw_score += 1
+    elif bchw_consistency > cbhw_consistency + 0.5:
+        bchw_score += 1
+
+    # Heuristic 5: Check for RGB-like properties in BCHW interpretation
+    # RGB images often have correlated but distinct channels
+    rgb_like_score = 0
+    for b in range(3):
+        # Check if this batch item looks like a natural RGB image
+        r_channel = arr[b, 0]
+        g_channel = arr[b, 1]
+        b_channel = arr[b, 2]
+
+        # RGB channels should have some correlation but not be identical
+        rg_corr = abs(np.corrcoef(r_channel.flatten(), g_channel.flatten())[0, 1])
+        rb_corr = abs(np.corrcoef(r_channel.flatten(), b_channel.flatten())[0, 1])
+        gb_corr = abs(np.corrcoef(g_channel.flatten(), b_channel.flatten())[0, 1])
+
+        avg_rgb_corr = np.mean([rg_corr, rb_corr, gb_corr])
+
+        # Good RGB correlation range: moderate but not too high
+        if 0.3 < avg_rgb_corr < 0.95:
+            rgb_like_score += 1
+        elif avg_rgb_corr > 0.98:  # Too similar, might be same channel
+            rgb_like_score -= 0.5
+
+    if rgb_like_score >= 2:  # At least 2 out of 3 look RGB-like
         bchw_score += 1
 
     # Default preference: BCHW is more common in most frameworks
-    bchw_score += 0.5
+    # But make this preference stronger when correlations are ambiguous
+    if abs(corr_diff) < 0.02:  # Very close correlations
+        bchw_score += 1  # Strong preference for BCHW
+    else:
+        bchw_score += 0.5  # Normal preference
 
     return "CBHW" if cbhw_score > bchw_score else "BCHW"
