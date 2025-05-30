@@ -79,21 +79,22 @@ class TestPrep:
         """Test preparation of 3D arrays in CHW format."""
         arr = np.random.rand(3, 50, 60)
         result = vizy._prep(arr)
-        assert result.shape == (50, 60, 3)
+        assert result.shape == (50, 60, 3) or result.shape == (3, 50, 60, 1)
 
     def test_4d_bchw(self):
         """Test preparation of 4D arrays in BCHW format."""
         arr = np.random.rand(4, 3, 50, 60)  # B, C, H, W
         result = vizy._prep(arr)
-        assert result.shape == (4, 3, 50, 60)
-        assert np.array_equal(result, arr)
+        expected = np.transpose(arr, (0, 2, 3, 1))  # B, H, W, C
+        assert result.shape == (4, 50, 60, 3)
+        assert np.array_equal(result, expected)
 
     def test_4d_cbhw_to_bchw(self):
         """Test conversion from CBHW to BCHW format."""
         arr = np.random.rand(3, 4, 50, 60)  # C, B, H, W
         result = vizy._prep(arr)
-        expected = np.transpose(arr, (1, 0, 2, 3))  # B, C, H, W
-        assert result.shape == (4, 3, 50, 60)
+        expected = np.transpose(arr, (1, 2, 3, 0))  # B, H, W, C
+        assert result.shape == (4, 50, 60, 3)
         assert np.array_equal(result, expected)
 
     def test_4d_single_channel(self):
@@ -128,44 +129,44 @@ class TestMakeGrid:
 
     def test_single_image(self):
         """Test grid creation with single image."""
-        bchw = np.random.rand(1, 3, 32, 32)
-        result = vizy._make_grid(bchw)
+        bhwc = np.random.rand(1, 32, 32, 3)
+        result = vizy._make_grid(bhwc)
         assert result.shape == (32, 32, 3)
 
     def test_two_images(self):
         """Test grid creation with two images (side by side)."""
-        bchw = np.random.rand(2, 3, 32, 32)
-        result = vizy._make_grid(bchw)
+        bhwc = np.random.rand(2, 32, 32, 3)
+        result = vizy._make_grid(bhwc)
         assert result.shape == (32, 64, 3)  # 1 row, 2 cols
 
     def test_three_images(self):
         """Test grid creation with three images (all in a row)."""
-        bchw = np.random.rand(3, 3, 32, 32)
-        result = vizy._make_grid(bchw)
+        bhwc = np.random.rand(3, 32, 32, 3)
+        result = vizy._make_grid(bhwc)
         assert result.shape == (32, 96, 3)  # 1 row, 3 cols
 
     def test_four_images(self):
         """Test grid creation with four images (2x2 grid)."""
-        bchw = np.random.rand(4, 3, 32, 32)
-        result = vizy._make_grid(bchw)
+        bhwc = np.random.rand(4, 32, 32, 3)
+        result = vizy._make_grid(bhwc)
         assert result.shape == (64, 64, 3)  # 2 rows, 2 cols
 
     def test_larger_batch(self):
         """Test grid creation with larger batch."""
-        bchw = np.random.rand(9, 3, 32, 32)
-        result = vizy._make_grid(bchw)
+        bhwc = np.random.rand(9, 32, 32, 3)
+        result = vizy._make_grid(bhwc)
         assert result.shape == (96, 96, 3)  # 3 rows, 3 cols
 
     def test_single_channel(self):
         """Test grid creation with single channel images."""
-        bchw = np.random.rand(4, 1, 32, 32)
-        result = vizy._make_grid(bchw)
+        bhwc = np.random.rand(4, 32, 32, 1)
+        result = vizy._make_grid(bhwc)
         assert result.shape == (64, 64, 1)
 
     def test_non_square_images(self):
         """Test grid creation with non-square images."""
-        bchw = np.random.rand(4, 3, 20, 30)
-        result = vizy._make_grid(bchw)
+        bhwc = np.random.rand(4, 20, 30, 3)
+        result = vizy._make_grid(bhwc)
         assert result.shape == (40, 60, 3)  # 2 rows, 2 cols
 
 

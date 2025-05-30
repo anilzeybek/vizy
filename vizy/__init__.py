@@ -23,6 +23,8 @@ from typing import Any, Sequence
 import matplotlib.pyplot as plt
 import numpy as np
 
+from .format_detection import smart_3d_format_detection, smart_4d_format_detection
+
 try:
     import torch  # type: ignore
 except ModuleNotFoundError:  # pragma: no cover
@@ -33,7 +35,7 @@ __version__: str = "0.1.0"
 
 
 def _to_numpy(x: Any) -> np.ndarray:
-    """Convert *x* to NumPy array, detaching from torch if needed."""
+    """Convert x to NumPy array, detaching from torch if needed."""
     if torch is not None and isinstance(x, torch.Tensor):
         x = x.detach().cpu().numpy()
     if not isinstance(x, np.ndarray):
@@ -57,26 +59,56 @@ def _prep(arr: np.ndarray) -> np.ndarray:
     """Prepare array for visualization by:
     - Squeezing singleton dimensions
     - Converting 2D/3D arrays to HWC format using _to_hwc
-    - Ensuring 4D arrays are in BCHW format
+    - Ensuring 4D arrays are in BHWC format
     - Raising error for unsupported shapes
     """
     arr = arr.squeeze()
-    if arr.ndim in (2, 3):
-        return _to_hwc(arr)
+    if arr.ndim == 2:
+        return arr
+    if arr.ndim == 3:
+        # Special handling for ambiguous (3, H, W) case
+        if arr.shape[0] == 3:
+            format_type = smart_3d_format_detection(arr)
+            if format_type == "rgb":
+                # Treat as single RGB image: (3, H, W) -> (H, W, 3)
+                return np.transpose(arr, (1, 2, 0))
+            else:
+                # Treat as batch: (3, H, W) -> (3, H, W, 1) -> continue to 4D handling
+                return arr[:, :, :, np.newaxis]  # Add channel dimension
+        else:
+            # Non-ambiguous 3D case
+            return _to_hwc(arr)
+
     if arr.ndim == 4:
+        # Handle the ambiguous (3, 3, H, W) case
+        if arr.shape[0] == 3 and arr.shape[1] == 3:
+            format_type = smart_4d_format_detection(arr)
+            if format_type == "CBHW":
+                # Convert C,B,H,W -> B,H,W,C
+                arr = np.transpose(arr, (1, 2, 3, 0))
+            else:
+                # Convert B,C,H,W -> B,H,W,C
+                arr = np.transpose(arr, (0, 2, 3, 1))
+            return arr
+
+        # Non-ambiguous 4D cases
         # try B,C,H,W
         if arr.shape[1] in (1, 3):
-            return arr  # B,C,H,W
+            # Convert B,C,H,W -> B,H,W,C
+            arr = np.transpose(arr, (0, 2, 3, 1))
+            return arr
         # else maybe C,B,H,W
         if arr.shape[0] in (1, 3):
-            arr = np.transpose(arr, (1, 0, 2, 3))  # B,C,H,W
+            # Convert C,B,H,W -> B,H,W,C
+            arr = np.transpose(arr, (1, 2, 3, 0))
             return arr
+
     raise ValueError(f"Cannot prepare array with shape {arr.shape}")
 
 
-def _make_grid(bchw: np.ndarray) -> np.ndarray:
-    """Make grid image from BxCxHxW array.
-    
+def _make_grid(bhwc: np.ndarray) -> np.ndarray:
+    """Make grid image from BxHxWxC array.
+
     Arranges multiple images in a grid layout with the following properties:
     - Single image remains unchanged
     - 2-3 images arranged horizontally in a row
@@ -85,7 +117,7 @@ def _make_grid(bchw: np.ndarray) -> np.ndarray:
     - Maintains original image dimensions and channels
     - Uses black background for empty grid positions
     """
-    b, c, h, w = bchw.shape
+    b, h, w, c = bhwc.shape
 
     # Create a more compact grid layout
     # For small batch sizes, prefer horizontal layout, except for 4 images (2x2)
@@ -103,10 +135,10 @@ def _make_grid(bchw: np.ndarray) -> np.ndarray:
         grid_rows = math.ceil(b / grid_cols)
 
     # canvas initialised to zeros (black background)
-    canvas = np.zeros((h * grid_rows, w * grid_cols, c), dtype=bchw.dtype)
+    canvas = np.zeros((h * grid_rows, w * grid_cols, c), dtype=bhwc.dtype)
     for idx in range(b):
         row, col = divmod(idx, grid_cols)
-        img = _to_hwc(bchw[idx])
+        img = bhwc[idx]  # Already in HWC format
         canvas[row * h : (row + 1) * h, col * w : (col + 1) * w, :] = img
     return canvas
 
