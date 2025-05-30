@@ -217,7 +217,7 @@ def summary(tensor: Any) -> None:
     # Determine the original type
     if torch is not None and isinstance(tensor, torch.Tensor):
         array_type = "torch.Tensor"
-        device_info = f" (device: {tensor.device})" if hasattr(tensor, 'device') else ""
+        device_info = f" (device: {tensor.device})" if hasattr(tensor, "device") else ""
         # Convert to numpy for analysis but keep original for type info
         arr = tensor.detach().cpu().numpy()
         dtype_str = str(tensor.dtype)
@@ -228,19 +228,19 @@ def summary(tensor: Any) -> None:
         dtype_str = str(tensor.dtype)
     else:
         raise TypeError("Expected torch.Tensor | np.ndarray")
-    
+
     # Basic info
     print(f"Type: {array_type}{device_info}")
     print(f"Shape: {arr.shape}")
     print(f"Dtype: {dtype_str}")
-    
+
     # Range (min - max)
     if arr.size > 0:  # Only if array is not empty
         arr_min, arr_max = arr.min(), arr.max()
         print(f"Range: {arr_min} - {arr_max}")
-        
+
         # Number of unique values for integer dtypes
-        if arr.dtype.kind in ('i', 'u'):  # signed or unsigned integer
+        if arr.dtype.kind in ("i", "u"):  # signed or unsigned integer
             unique_count = len(np.unique(arr))
             print(f"Number of unique values: {unique_count}")
     else:
