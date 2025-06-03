@@ -1,6 +1,6 @@
 [project]
 name = "vizy"
-version = "0.1.5"
+version = "0.2.0"
 description = "Tiny tensor visualiser: vz.plot(t) / vz.save(t)"
 authors = [{name = "Anıl Zeybek"}]
 readme = "README.md"
@@ -29,6 +29,7 @@ dependencies = [
 
 [project.optional-dependencies]
 torch = ["torch"]
+pil = ["Pillow"]
 
 [project.urls]
 Repository = "https://github.com/anilzeybek/vizy"
@@ -43,4 +44,5 @@ dev = [
     "ruff>=0.11.11",
     "pytest>=7.0.0",
     "torch",
+    "Pillow",
 ]

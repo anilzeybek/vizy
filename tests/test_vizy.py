@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 import torch
+from PIL import Image
 
 import vizy
 
@@ -373,6 +374,56 @@ class TestSummary:
         """Test summary with invalid input type."""
         with pytest.raises(TypeError, match="Expected torch.Tensor | np.ndarray"):
             vizy.summary([1, 2, 3])
+
+
+class TestPILSupport:
+    """Test PIL Image support functionality."""
+
+    def test_plot_pil_image(self):
+        """Test plotting PIL image."""
+        pil_img = Image.new("RGB", (32, 32), color=(0, 255, 0))  # Green image
+        
+        with patch("matplotlib.pyplot.show"):
+            _ = vizy.plot(pil_img)
+        
+        # The function should complete without error
+        plt.close("all")
+
+    def test_save_pil_image(self):
+        """Test saving PIL image to file."""
+        pil_img = Image.new("RGB", (40, 30), color=(0, 0, 255))  # Blue image
+        
+        with patch("builtins.print") as mock_print:
+            result_path = vizy.save(pil_img)
+        
+        try:
+            assert os.path.exists(result_path)
+            assert result_path.endswith(".png")
+            mock_print.assert_called_once_with(result_path)
+        finally:
+            if os.path.exists(result_path):
+                os.unlink(result_path)
+
+    def test_summary_pil_rgb(self):
+        """Test summary for PIL RGB image."""
+        pil_img = Image.new("RGB", (50, 60), color=(128, 64, 192))
+        
+        with patch("builtins.print") as mock_print:
+            vizy.summary(pil_img)
+        
+        calls = [call.args[0] for call in mock_print.call_args_list]
+        assert any("PIL.Image" in call for call in calls)
+        assert any("mode: RGB" in call for call in calls)
+        assert any("Shape: (60, 50, 3)" in call for call in calls)
+        assert any("uint8" in call for call in calls)
+
+    def test_mixed_types_error(self):
+        """Test that invalid types still raise appropriate errors."""
+        with pytest.raises(TypeError, match="Expected torch.Tensor | np.ndarray | PIL.Image"):
+            vizy._to_numpy([1, 2, 3])  # List should still fail
+        
+        with pytest.raises(TypeError, match="Expected torch.Tensor | np.ndarray | PIL.Image"):
+            vizy._to_numpy("string")  # String should still fail
 
 
 class TestRandomArrays:

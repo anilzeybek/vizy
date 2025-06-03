@@ -13,6 +13,7 @@ vizy.save(path_or_tensor, tensor=None, **imshow_kwargs)  # save to file
 
 If *tensor* is 4-D we assume shape is either (B, C, H, W) or (C, B, H, W) with C in {1,3}.
 For ndarray/tensors of 2-D or 3-D we transpose to (H, W, C) as expected by Matplotlib.
+Supports torch.Tensor, numpy.ndarray, and PIL.Image inputs.
 """
 
 import math
@@ -30,16 +31,24 @@ try:
 except ModuleNotFoundError:  # pragma: no cover
     torch = None  # type: ignore
 
+try:
+    from PIL import Image  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover
+    Image = None  # type: ignore
+
 __all__: Sequence[str] = ("plot", "save", "summary")
-__version__: str = "0.1.0"
+__version__: str = "0.2.0"
 
 
 def _to_numpy(x: Any) -> np.ndarray:
     """Convert x to NumPy array, detaching from torch if needed."""
     if torch is not None and isinstance(x, torch.Tensor):
         x = x.detach().cpu().numpy()
+    elif Image is not None and isinstance(x, Image.Image):
+        # Convert PIL Image to numpy array
+        x = np.array(x)
     if not isinstance(x, np.ndarray):
-        raise TypeError("Expected torch.Tensor | np.ndarray")
+        raise TypeError("Expected torch.Tensor | np.ndarray | PIL.Image")
     return x
 
 
@@ -189,8 +198,8 @@ def plot(tensor: Any, **imshow_kwargs) -> plt.Figure:
 
     Parameters
     ----------
-    tensor : torch.Tensor | np.ndarray
-        Image tensor of shape (*, H, W) or (*, C, H, W).
+    tensor : torch.Tensor | np.ndarray | PIL.Image
+        Image tensor of shape (*, H, W) or (*, C, H, W), or PIL Image.
     **imshow_kwargs
         Extra arguments forwarded to plt.imshow.
 
@@ -213,7 +222,7 @@ def save(path_or_tensor: Any, tensor: Any | None = None, **imshow_kwargs) -> str
     ----------
     path_or_tensor :
         Destination path or tensor (if path omitted).
-    tensor :
+    tensor : torch.Tensor | np.ndarray | PIL.Image | None
         Tensor to save, or None if tensor is first positional argument.
 
     Returns
@@ -243,8 +252,8 @@ def summary(tensor: Any) -> None:
 
     Parameters
     ----------
-    tensor : torch.Tensor | np.ndarray
-        Tensor or array to summarize.
+    tensor : torch.Tensor | np.ndarray | PIL.Image
+        Tensor, array, or PIL Image to summarize.
     """
     # Determine the original type
     if torch is not None and isinstance(tensor, torch.Tensor):
@@ -253,13 +262,19 @@ def summary(tensor: Any) -> None:
         # Convert to numpy for analysis but keep original for type info
         arr = tensor.detach().cpu().numpy()
         dtype_str = str(tensor.dtype)
+    elif Image is not None and isinstance(tensor, Image.Image):
+        array_type = "PIL.Image"
+        device_info = f" (mode: {tensor.mode})"
+        # Convert to numpy for analysis
+        arr = np.array(tensor)
+        dtype_str = str(arr.dtype)
     elif isinstance(tensor, np.ndarray):
         array_type = "numpy.ndarray"
         device_info = ""
         arr = tensor
         dtype_str = str(tensor.dtype)
     else:
-        raise TypeError("Expected torch.Tensor | np.ndarray")
+        raise TypeError("Expected torch.Tensor | np.ndarray | PIL.Image")
 
     # Basic info
     print(f"Type: {array_type}{device_info}")
