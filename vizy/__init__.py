@@ -13,13 +13,13 @@ vizy.save(path_or_tensor, tensor=None, **imshow_kwargs)  # save to file
 
 If *tensor* is 4-D we assume shape is either (B, C, H, W) or (C, B, H, W) with C in {1,3}.
 For ndarray/tensors of 2-D or 3-D we transpose to (H, W, C) as expected by Matplotlib.
-Supports torch.Tensor, numpy.ndarray, and PIL.Image inputs.
+Supports torch.Tensor, numpy.ndarray, PIL.Image inputs, and lists/sequences of these types.
 """
 
 import math
 import os
 import tempfile
-from typing import Any, Sequence
+from typing import Any, List, Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -40,15 +40,99 @@ __all__: Sequence[str] = ("plot", "save", "summary")
 __version__: str = "0.2.0"
 
 
+def _is_sequence_of_tensors(x: Any) -> bool:
+    """Check if x is a list/tuple of tensors, arrays, or PIL Images."""
+    if not isinstance(x, (list, tuple)):
+        return False
+    if len(x) == 0:
+        return False
+
+    # Check if all elements are valid tensor types
+    for item in x:
+        is_tensor = torch is not None and isinstance(item, torch.Tensor)
+        is_array = isinstance(item, np.ndarray)
+        is_pil = Image is not None and isinstance(item, Image.Image)
+        if not (is_tensor or is_array or is_pil):
+            return False
+    return True
+
+
+def _pad_to_common_size(arrays: List[np.ndarray]) -> List[np.ndarray]:
+    """Pad arrays to have the same height and width (last two dimensions)."""
+    if len(arrays) == 0:
+        return arrays
+
+    # Find maximum dimensions
+    max_h = max(arr.shape[-2] for arr in arrays)
+    max_w = max(arr.shape[-1] for arr in arrays)
+
+    padded_arrays = []
+    for arr in arrays:
+        if arr.ndim == 2:
+            h, w = arr.shape
+            pad_h = max_h - h
+            pad_w = max_w - w
+            # Pad with zeros (black) on bottom and right
+            padded = np.pad(arr, ((0, pad_h), (0, pad_w)), mode="constant", constant_values=0)
+        elif arr.ndim == 3:
+            if arr.shape[0] in (1, 3):  # CHW format
+                c, h, w = arr.shape
+                pad_h = max_h - h
+                pad_w = max_w - w
+                padded = np.pad(arr, ((0, 0), (0, pad_h), (0, pad_w)), mode="constant", constant_values=0)
+            else:  # HWC format
+                h, w, c = arr.shape
+                pad_h = max_h - h
+                pad_w = max_w - w
+                padded = np.pad(arr, ((0, pad_h), (0, pad_w), (0, 0)), mode="constant", constant_values=0)
+        else:
+            raise ValueError(f"Expected 2D or 3D arrays, got {arr.ndim}D")
+
+        padded_arrays.append(padded)
+    return padded_arrays
+
+
 def _to_numpy(x: Any) -> np.ndarray:
-    """Convert x to NumPy array, detaching from torch if needed."""
+    """Convert x to NumPy array, detaching from torch if needed. Handles lists/sequences of tensors."""
+    # Handle lists/sequences of tensors
+    if _is_sequence_of_tensors(x):
+        # Convert each item to numpy and validate dimensions
+        arrays = []
+        for item in x:
+            if torch is not None and isinstance(item, torch.Tensor):
+                arr = item.detach().cpu().numpy()
+            elif Image is not None and isinstance(item, Image.Image):
+                arr = np.array(item)
+            elif isinstance(item, np.ndarray):
+                arr = item
+            else:
+                raise TypeError(f"Unsupported type in sequence: {type(item)}")
+
+            # Validate that each tensor is 2D or 3D (no batches in the list)
+            arr = arr.squeeze()  # Remove singleton dimensions
+            if arr.ndim not in (2, 3):
+                raise ValueError(
+                    f"Each tensor in list must be 2D or 3D after squeezing, got {arr.ndim}D with shape {arr.shape}"
+                )
+
+            arrays.append(arr)
+
+        # Pad arrays to common size
+        arrays = _pad_to_common_size(arrays)
+
+        # Stack arrays to create a batch dimension
+        # All arrays should now have the same shape
+        stacked = np.stack(arrays, axis=0)  # Creates (B, ...) format
+        return stacked
+
+    # Handle single tensor/array/image
     if torch is not None and isinstance(x, torch.Tensor):
         x = x.detach().cpu().numpy()
     elif Image is not None and isinstance(x, Image.Image):
         # Convert PIL Image to numpy array
         x = np.array(x)
     if not isinstance(x, np.ndarray):
-        raise TypeError("Expected torch.Tensor | np.ndarray | PIL.Image")
+        raise TypeError("Expected torch.Tensor | np.ndarray | PIL.Image | sequence of these types")
     return x
 
 
@@ -198,8 +282,10 @@ def plot(tensor: Any, **imshow_kwargs) -> plt.Figure:
 
     Parameters
     ----------
-    tensor : torch.Tensor | np.ndarray | PIL.Image
-        Image tensor of shape (*, H, W) or (*, C, H, W), or PIL Image.
+    tensor : torch.Tensor | np.ndarray | PIL.Image | sequence of these
+        Image tensor of shape (*, H, W) or (*, C, H, W), PIL Image, or a
+        list/tuple of 2D/3D tensors. For lists with mismatched dimensions,
+        images will be padded to the largest size.
     **imshow_kwargs
         Extra arguments forwarded to plt.imshow.
 
@@ -222,8 +308,9 @@ def save(path_or_tensor: Any, tensor: Any | None = None, **imshow_kwargs) -> str
     ----------
     path_or_tensor :
         Destination path or tensor (if path omitted).
-    tensor : torch.Tensor | np.ndarray | PIL.Image | None
+    tensor : torch.Tensor | np.ndarray | PIL.Image | sequence of these | None
         Tensor to save, or None if tensor is first positional argument.
+        For lists with mismatched dimensions, images will be padded to the largest size.
 
     Returns
     -------
@@ -242,6 +329,7 @@ def save(path_or_tensor: Any, tensor: Any | None = None, **imshow_kwargs) -> str
         os.close(fd)
     fig.savefig(path, bbox_inches=None, pad_inches=0)
     plt.close(fig)
+
     print(path)
     return path
 
@@ -252,10 +340,46 @@ def summary(tensor: Any) -> None:
 
     Parameters
     ----------
-    tensor : torch.Tensor | np.ndarray | PIL.Image
-        Tensor, array, or PIL Image to summarize.
+    tensor : torch.Tensor | np.ndarray | PIL.Image | sequence of these
+        Tensor, array, PIL Image, or list/tuple of these to summarize.
     """
-    # Determine the original type
+    if _is_sequence_of_tensors(tensor):
+        print(f"Type: Sequence ({type(tensor).__name__}) of {len(tensor)} tensors")
+        print("Individual tensor info:")
+        for i, item in enumerate(tensor):
+            print(f"  [{i}]:", end=" ")
+            # Get basic info for each item
+            if torch is not None and isinstance(item, torch.Tensor):
+                item_type = "torch.Tensor"
+                device_info = f" (device: {item.device})" if hasattr(item, "device") else ""
+                arr = item.detach().cpu().numpy()
+                dtype_str = str(item.dtype)
+            elif Image is not None and isinstance(item, Image.Image):
+                item_type = "PIL.Image"
+                device_info = f" (mode: {item.mode})"
+                arr = np.array(item)
+                dtype_str = str(arr.dtype)
+            elif isinstance(item, np.ndarray):
+                item_type = "numpy.ndarray"
+                device_info = ""
+                arr = item
+                dtype_str = str(item.dtype)
+            else:
+                print(f"Unsupported type: {type(item)}")
+                continue
+
+            print(f"{item_type}{device_info}, Shape: {arr.shape}, Dtype: {dtype_str}")
+
+        # Also show the stacked/processed version
+        print("\nProcessed as batch:")
+        print(f"Shape: {arr.shape}")
+        print(f"Dtype: {arr.dtype}")
+        if arr.size > 0:
+            arr_min, arr_max = arr.min(), arr.max()
+            print(f"Range: {arr_min} - {arr_max}")
+        return
+
+    # Determine the original type for single tensors
     if torch is not None and isinstance(tensor, torch.Tensor):
         array_type = "torch.Tensor"
         device_info = f" (device: {tensor.device})" if hasattr(tensor, "device") else ""
@@ -274,7 +398,7 @@ def summary(tensor: Any) -> None:
         arr = tensor
         dtype_str = str(tensor.dtype)
     else:
-        raise TypeError("Expected torch.Tensor | np.ndarray | PIL.Image")
+        raise TypeError("Expected torch.Tensor | np.ndarray | PIL.Image | sequence of these")
 
     # Basic info
     print(f"Type: {array_type}{device_info}")
