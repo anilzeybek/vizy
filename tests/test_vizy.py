@@ -373,7 +373,7 @@ class TestSummary:
     def test_summary_invalid_input(self):
         """Test summary with invalid input type."""
         with pytest.raises(TypeError, match="Expected torch.Tensor | np.ndarray"):
-            vizy.summary([1, 2, 3])
+            vizy.summary("invalid_string")
 
 
 class TestPILSupport:
@@ -420,7 +420,7 @@ class TestPILSupport:
     def test_mixed_types_error(self):
         """Test that invalid types still raise appropriate errors."""
         with pytest.raises(TypeError, match="Expected torch.Tensor | np.ndarray | PIL.Image"):
-            vizy._to_numpy([1, 2, 3])  # List should still fail
+            vizy._to_numpy([1, 2, 3])  # List of numbers should still fail
         
         with pytest.raises(TypeError, match="Expected torch.Tensor | np.ndarray | PIL.Image"):
             vizy._to_numpy("string")  # String should still fail
@@ -538,6 +538,167 @@ class TestRandomArrays:
         _ = vizy._prepare_for_display(arr)
         fig = vizy._create_figure(arr)
         plt.close(fig)
+
+
+class TestListSupport:
+    """Test list/sequence support functionality."""
+
+    def test_is_sequence_of_tensors_detection(self):
+        """Test sequence detection for various inputs."""
+        # Valid sequences
+        assert vizy._is_sequence_of_tensors([np.array([1, 2]), np.array([3, 4])])
+        assert vizy._is_sequence_of_tensors((np.array([1, 2]), np.array([3, 4])))
+        assert vizy._is_sequence_of_tensors([torch.tensor([1, 2]), torch.tensor([3, 4])])
+        
+        # Invalid sequences
+        assert not vizy._is_sequence_of_tensors([])  # Empty
+        assert not vizy._is_sequence_of_tensors(np.array([1, 2]))  # Single array
+        assert not vizy._is_sequence_of_tensors([1, 2, 3])  # List of numbers
+        assert not vizy._is_sequence_of_tensors([np.array([1]), "string"])  # Mixed invalid
+
+    def test_list_of_same_size_2d_arrays(self):
+        """Test processing list of 2D arrays with same dimensions."""
+        arr1 = np.random.randint(0, 255, (32, 32), dtype=np.uint8)
+        arr2 = np.random.randint(0, 255, (32, 32), dtype=np.uint8)
+        arr3 = np.random.randint(0, 255, (32, 32), dtype=np.uint8)
+        
+        array_list = [arr1, arr2, arr3]
+        result = vizy._to_numpy(array_list)
+        
+        # Should create a batch with shape (3, 32, 32)
+        assert result.shape == (3, 32, 32)
+        assert np.array_equal(result[0], arr1)
+        assert np.array_equal(result[1], arr2)
+        assert np.array_equal(result[2], arr3)
+
+    def test_list_of_different_size_arrays_with_padding(self):
+        """Test that arrays with different sizes get padded correctly."""
+        arr1 = np.random.randint(0, 255, (20, 30), dtype=np.uint8)  # Small
+        arr2 = np.random.randint(0, 255, (40, 50), dtype=np.uint8)  # Large
+        arr3 = np.random.randint(0, 255, (25, 35), dtype=np.uint8)  # Medium
+        
+        array_list = [arr1, arr2, arr3]
+        result = vizy._to_numpy(array_list)
+        
+        # All should be padded to largest size (40, 50)
+        assert result.shape == (3, 40, 50)
+        
+        # Check that original content is preserved (top-left corner)
+        assert np.array_equal(result[0][:20, :30], arr1)
+        assert np.array_equal(result[1], arr2)  # Largest, unchanged
+        assert np.array_equal(result[2][:25, :35], arr3)
+        
+        # Check padding is zeros (black)
+        assert np.all(result[0][20:, :] == 0)  # Bottom padding
+        assert np.all(result[0][:, 30:] == 0)  # Right padding
+
+    def test_list_of_3d_chw_arrays(self):
+        """Test processing list of 3D arrays in CHW format."""
+        rgb1 = np.random.randint(0, 255, (3, 32, 32), dtype=np.uint8)
+        rgb2 = np.random.randint(0, 255, (3, 32, 32), dtype=np.uint8)
+        
+        array_list = [rgb1, rgb2]
+        result = vizy._to_numpy(array_list)
+        
+        # Should create batch with shape (2, 3, 32, 32)
+        assert result.shape == (2, 3, 32, 32)
+        assert np.array_equal(result[0], rgb1)
+        assert np.array_equal(result[1], rgb2)
+
+    def test_mixed_tensor_types(self):
+        """Test list containing mix of numpy arrays and torch tensors."""
+        np_arr = np.random.randint(0, 255, (32, 32), dtype=np.uint8)
+        torch_arr = torch.randint(0, 255, (32, 32), dtype=torch.uint8)
+        
+        mixed_list = [np_arr, torch_arr]
+        result = vizy._to_numpy(mixed_list)
+        
+        assert result.shape == (2, 32, 32)
+        assert np.array_equal(result[0], np_arr)
+        assert np.array_equal(result[1], torch_arr.numpy())
+
+    def test_list_dimension_validation(self):
+        """Test that 4D tensors in lists are rejected."""
+        # Valid: Same dimension tensors
+        valid_list = [
+            np.random.rand(32, 32),  # 2D
+            np.random.rand(32, 32),  # 2D
+        ]
+        result = vizy._to_numpy(valid_list)
+        assert result.ndim == 3  # Should work (B, H, W)
+        
+        # Invalid: 4D tensor in list
+        invalid_list = [
+            np.random.rand(32, 32),  # 2D - OK
+            np.random.rand(2, 3, 32, 32),  # 4D - NOT OK
+        ]
+        with pytest.raises(ValueError, match="Each tensor in list must be 2D or 3D"):
+            vizy._to_numpy(invalid_list)
+
+    def test_list_plot_integration(self):
+        """Test that list plotting works end-to-end."""
+        arr1 = np.random.randint(0, 255, (32, 32), dtype=np.uint8)
+        arr2 = np.random.randint(0, 255, (32, 32), dtype=np.uint8)
+        
+        array_list = [arr1, arr2]
+        
+        # Should work without errors
+        with patch("matplotlib.pyplot.show"):
+            _ = vizy.plot(array_list)
+        
+        plt.close("all")
+
+    def test_list_save_integration(self):
+        """Test that list saving works end-to-end."""
+        arr1 = np.random.randint(0, 255, (32, 32), dtype=np.uint8)
+        arr2 = np.random.randint(0, 255, (32, 32), dtype=np.uint8)
+        
+        array_list = [arr1, arr2]
+        
+        with patch("builtins.print") as mock_print:
+            result_path = vizy.save(array_list)
+        
+        try:
+            assert os.path.exists(result_path)
+            assert result_path.endswith(".png")
+            mock_print.assert_called_once_with(result_path)
+        finally:
+            if os.path.exists(result_path):
+                os.unlink(result_path)
+
+    def test_list_summary_integration(self):
+        """Test that list summary works correctly."""
+        arr1 = np.random.randint(0, 255, (32, 32), dtype=np.uint8)
+        arr2 = np.random.randint(0, 255, (48, 48), dtype=np.uint8)  # Different size
+        
+        array_list = [arr1, arr2]
+        
+        with patch("builtins.print") as mock_print:
+            vizy.summary(array_list)
+        
+        calls = [call.args[0] for call in mock_print.call_args_list]
+        # Should mention it's a sequence
+        assert any("Sequence" in call for call in calls)
+        assert any("2 tensors" in call for call in calls)
+        # Should show individual tensor info
+        assert any("Shape: (32, 32)" in call for call in calls)
+        assert any("Shape: (48, 48)" in call for call in calls)
+        # Should show processed batch info
+        assert any("Shape: (2, 48, 48)" in call for call in calls)  # Padded to largest
+
+    def test_empty_list_handling(self):
+        """Test that empty lists are handled gracefully."""
+        with pytest.raises((TypeError, ValueError)):
+            vizy._to_numpy([])
+
+    def test_single_item_list(self):
+        """Test that single-item lists work correctly."""
+        arr = np.random.randint(0, 255, (32, 32), dtype=np.uint8)
+        single_list = [arr]
+        
+        result = vizy._to_numpy(single_list)
+        assert result.shape == (1, 32, 32)
+        assert np.array_equal(result[0], arr)
 
 
 if __name__ == "__main__":
