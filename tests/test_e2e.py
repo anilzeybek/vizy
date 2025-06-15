@@ -1,0 +1,204 @@
+import os
+
+import imagehash
+import numpy as np
+from PIL import Image
+import torch
+
+import vizy
+
+
+def get_test_image_path() -> str:
+    return "tests/data/input/test_image.jpg"
+
+
+def get_test_image_grayscale_path() -> str:
+    return "tests/data/input/test_image_grayscale.jpg"
+
+
+def get_test_image_2_path() -> str:
+    return "tests/data/input/test_image_2.jpg"
+
+
+def get_test_image_3_path() -> str:
+    return "tests/data/input/test_image_3.jpg"
+
+
+def get_test_image() -> np.ndarray:
+    return image_path_to_array(get_test_image_path())
+
+
+def image_path_to_array(image_path: str) -> np.ndarray:
+    image = Image.open(image_path)
+    return np.array(image)
+
+
+def images_look_same(img_path1, img_path2, tolerance=2) -> bool:
+    img1 = Image.open(img_path1).convert("RGB")
+    img2 = Image.open(img_path2).convert("RGB")
+
+    hash1 = imagehash.phash(img1)
+    hash2 = imagehash.phash(img2)
+
+    diff = hash1 - hash2
+    return diff <= tolerance
+
+
+def test_hwc():
+    image = get_test_image()
+    saved_image_path = vizy.save(image)
+    try:
+        assert images_look_same(saved_image_path, get_test_image_path()), "The saved image does not match the original."
+    finally:
+        os.unlink(saved_image_path)
+
+
+def test_hw():
+    image = get_test_image()[..., 0]
+    saved_image_path = vizy.save(image)
+    try:
+        assert images_look_same(saved_image_path, get_test_image_grayscale_path()), (
+            "The saved image does not match the original."
+        )
+    finally:
+        os.unlink(saved_image_path)
+
+
+def test_chw():
+    image = get_test_image().transpose(2, 0, 1)
+    saved_image_path = vizy.save(image)
+    try:
+        assert images_look_same(saved_image_path, get_test_image_path()), "The saved image does not match the original."
+    finally:
+        os.unlink(saved_image_path)
+
+
+def test_1hwc():
+    image = get_test_image()[None, ...]
+    saved_image_path = vizy.save(image)
+    try:
+        assert images_look_same(saved_image_path, get_test_image_path()), "The saved image does not match the original."
+    finally:
+        os.unlink(saved_image_path)
+
+
+def test_hwc1():
+    image = get_test_image()[..., None]
+    saved_image_path = vizy.save(image)
+    try:
+        assert images_look_same(saved_image_path, get_test_image_path()), "The saved image does not match the original."
+    finally:
+        os.unlink(saved_image_path)
+
+
+def test_1hw():
+    image = get_test_image()[None, ..., 0]
+    saved_image_path = vizy.save(image)
+    try:
+        assert images_look_same(saved_image_path, get_test_image_grayscale_path()), (
+            "The saved image does not match the original."
+        )
+    finally:
+        os.unlink(saved_image_path)
+
+
+def test_chw1():
+    image = get_test_image().transpose(2, 0, 1)[..., None]
+    saved_image_path = vizy.save(image)
+    try:
+        assert images_look_same(saved_image_path, get_test_image_path()), "The saved image does not match the original."
+    finally:
+        os.unlink(saved_image_path)
+
+
+def test_11hw():
+    image = get_test_image()[None, None, ..., 0]
+    saved_image_path = vizy.save(image)
+    try:
+        assert images_look_same(saved_image_path, get_test_image_grayscale_path()), (
+            "The saved image does not match the original."
+        )
+    finally:
+        os.unlink(saved_image_path)
+
+
+def test_1chw_float():
+    image = get_test_image().transpose(2, 0, 1)[None, ...] / 255.0  # Normalize to [0, 1]
+    saved_image_path = vizy.save(image)
+    try:
+        assert images_look_same(saved_image_path, get_test_image_path()), "The saved image does not match the original."
+    finally:
+        os.unlink(saved_image_path)
+
+
+def test_hwc1_full_float():
+    image = get_test_image().transpose(2, 0, 1)[None, ...].astype(np.float32)
+    saved_image_path = vizy.save(image)
+    try:
+        assert images_look_same(saved_image_path, get_test_image_path()), "The saved image does not match the original."
+    finally:
+        os.unlink(saved_image_path)
+
+
+def test_chw1_torch():
+    image = torch.from_numpy(get_test_image().transpose(2, 0, 1)[None, ...]).float() / 255.0
+    saved_image_path = vizy.save(image)
+    try:
+        assert images_look_same(saved_image_path, get_test_image_path()), "The saved image does not match the original."
+    finally:
+        os.unlink(saved_image_path)
+
+
+def test_2chw_torch():
+    image = torch.from_numpy(get_test_image()).permute(2, 0, 1)[None, ...]
+    image = torch.cat([image, image - 40], dim=0)
+    image = torch.clip(image, 0, 255)  # Ensure values stay in valid range
+
+    saved_image_path = vizy.save(image)
+    try:
+        assert images_look_same(saved_image_path, get_test_image_2_path()), (
+            "The saved image does not match the original."
+        )
+    finally:
+        os.unlink(saved_image_path)
+
+
+def test_3chw():
+    image = get_test_image().transpose(2, 0, 1)[None, ...]
+    image = np.concatenate([image, image - 40, image + 40], axis=0)
+    image = np.clip(image, 0, 255)  # Ensure values stay in valid range
+
+    saved_image_path = vizy.save(image)
+    try:
+        assert images_look_same(saved_image_path, get_test_image_3_path()), (
+            "The saved image does not match the original."
+        )
+    finally:
+        os.unlink(saved_image_path)
+
+
+def test_c3hw():
+    image = get_test_image().transpose(2, 0, 1)[None, ...]
+    image = np.concatenate([image, image - 40, image + 40], axis=0)
+    image = np.clip(image, 0, 255)  # Ensure values stay in valid range
+    image = image.transpose(1, 0, 2, 3)  # Convert to C3HW format
+
+    saved_image_path = vizy.save(image)
+    try:
+        assert images_look_same(saved_image_path, get_test_image_3_path()), (
+            "The saved image does not match the original."
+        )
+    finally:
+        os.unlink(saved_image_path)
+
+
+def test_summary():
+    pass
+
+
+def main():
+    test_hwc()
+
+
+if __name__ == "__main__":
+    main()

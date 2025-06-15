@@ -45,4 +45,5 @@ dev = [
     "pytest>=7.0.0",
     "torch",
     "Pillow",
+    "imagehash>=4.3.2",
 ]
