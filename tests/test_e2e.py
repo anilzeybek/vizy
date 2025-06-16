@@ -177,11 +177,11 @@ def test_3chw():
         os.unlink(saved_image_path)
 
 
-def test_c3hw():
-    image = get_test_image().transpose(2, 0, 1)[None, ...]
-    image = np.concatenate([image, image - 40, image + 40], axis=0)
-    image = np.clip(image, 0, 255)  # Ensure values stay in valid range
-    image = image.transpose(1, 0, 2, 3)  # Convert to C3HW format
+def test_c3hw_torch():
+    image = torch.from_numpy(get_test_image()).permute(2, 0, 1)[None, ...]
+    image = torch.cat([image, image - 40, image + 40], dim=0)
+    image = torch.clip(image, 0, 255)  # Ensure values stay in valid range
+    image = image.permute(1, 0, 2, 3)  # Convert to C3HW format
 
     saved_image_path = vizy.save(image)
     try:
@@ -190,6 +190,34 @@ def test_c3hw():
         )
     finally:
         os.unlink(saved_image_path)
+
+
+def test_3hwc_float():
+    pass
+
+
+def test_2hw():
+    pass
+
+
+def test_4chw():
+    pass
+
+
+def test_4hwc():
+    pass
+
+
+def test_list_hwc():
+    pass
+
+
+def test_list_chw():
+    pass
+
+
+def test_list_hw():
+    pass
 
 
 def test_summary():
