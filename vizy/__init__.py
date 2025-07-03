@@ -66,16 +66,16 @@ def _is_sequence_of_tensors(x: TensorLike | Sequence[TensorLike]) -> bool:
     return True
 
 
-def _pad_to_common_size(tensors: List[np.ndarray]) -> List[np.ndarray]:
+def _pad_to_common_size(numpy_arrays: List[np.ndarray]) -> List[np.ndarray]:
     """Pad tensors to have the same height and width (last two dimensions)."""
-    if len(tensors) == 0:
-        return tensors
+    if len(numpy_arrays) == 0:
+        return numpy_arrays
 
-    max_h = max(tensor.shape[-2] for tensor in tensors)
-    max_w = max(tensor.shape[-1] for tensor in tensors)
+    max_h = max(tensor.shape[-2] for tensor in numpy_arrays)
+    max_w = max(tensor.shape[-1] for tensor in numpy_arrays)
 
     padded_tensors = []
-    for tensor in tensors:
+    for tensor in numpy_arrays:
         if tensor.ndim == 2:
             h, w = tensor.shape
             pad_h = max_h - h
@@ -105,7 +105,7 @@ def _to_numpy(x: TensorLike | Sequence[TensorLike]) -> np.ndarray:
     # Handle lists/sequences of tensors
     if _is_sequence_of_tensors(x):
         # Convert each item to numpy and validate dimensions
-        tensors = []
+        numpy_arrays = []
         for item in x:
             if torch is not None and isinstance(item, torch.Tensor):
                 arr = item.detach().cpu().numpy()
@@ -123,11 +123,11 @@ def _to_numpy(x: TensorLike | Sequence[TensorLike]) -> np.ndarray:
                     f"Each tensor in list must be 2D or 3D after squeezing, got {arr.ndim}D with shape {arr.shape}"
                 )
 
-            tensors.append(arr)
+            numpy_arrays.append(arr)
 
-        tensors = _pad_to_common_size(tensors)
-        stacked_tensor = np.stack(tensors, axis=0)  # Creates (B, ...) format
-        return stacked_tensor
+        numpy_arrays = _pad_to_common_size(numpy_arrays)
+        stacked_numpy_array = np.stack(numpy_arrays, axis=0)  # Creates (B, ...) format
+        return stacked_numpy_array
 
     # Handle single tensor/array/image
     if torch is not None and isinstance(x, torch.Tensor):
