@@ -19,7 +19,7 @@ Supports torch.Tensor, numpy.ndarray, PIL.Image inputs, and lists/sequences of t
 import math
 import os
 import tempfile
-from typing import Any, List, Sequence
+from typing import List, Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -105,10 +105,7 @@ def _pad_to_common_size(numpy_arrays: List[np.ndarray]) -> List[np.ndarray]:
 
 
 def _to_numpy(x: TensorLike | Sequence[TensorLike]) -> np.ndarray:
-    """Convert x to NumPy array, detaching from torch if needed. Handles lists/sequences of tensors."""
-    # Handle lists/sequences of tensors
     if _is_sequence_of_tensors(x):
-        # Convert each item to numpy and validate dimensions
         numpy_arrays = []
         for item in x:
             if torch is not None and isinstance(item, torch.Tensor):
@@ -121,7 +118,7 @@ def _to_numpy(x: TensorLike | Sequence[TensorLike]) -> np.ndarray:
                 raise TypeError(f"Unsupported type in sequence: {type(item)}")
 
             # Validate that each tensor is 2D or 3D (no batches in the list)
-            arr = arr.squeeze()  # Remove singleton dimensions
+            arr = arr.squeeze()
             if arr.ndim not in (2, 3):
                 raise ValueError(
                     f"Each tensor in list must be 2D or 3D after squeezing, got {arr.ndim}D with shape {arr.shape}"
@@ -157,12 +154,7 @@ def _to_hwc(arr: np.ndarray) -> np.ndarray:
 
 
 def _prep(numpy_arr: np.ndarray) -> np.ndarray:
-    """Prepare array for visualization by:
-    - Squeezing singleton dimensions
-    - Converting 2D/3D arrays to HWC format using _to_hwc
-    - Ensuring 4D arrays are in BHWC format
-    - Raising error for unsupported shapes
-    """
+    """Convert any given numpy array to BHWC or HWC format."""
     numpy_arr = numpy_arr.squeeze()
     if numpy_arr.ndim == 2:
         return numpy_arr
@@ -179,7 +171,6 @@ def _prep(numpy_arr: np.ndarray) -> np.ndarray:
         else:
             # Non-ambiguous 3D case
             return _to_hwc(numpy_arr)
-
     if numpy_arr.ndim == 4:
         # Check if already in BHWC format (channels last)
         if numpy_arr.shape[3] in (1, 3):
@@ -309,7 +300,9 @@ def plot(tensor: TensorLike | Sequence[TensorLike], **imshow_kwargs) -> plt.Figu
     plt.show()
 
 
-def save(path_or_tensor: Any, tensor: Any | None = None, **imshow_kwargs) -> str:
+def save(
+    path_or_tensor: str | TensorLike | Sequence[TensorLike], tensor: TensorLike | None = None, **imshow_kwargs
+) -> str:
     """
     Save *tensor* to *path*. Two call styles are supported::
 
