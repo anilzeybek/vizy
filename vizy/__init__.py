@@ -39,9 +39,18 @@ except ModuleNotFoundError:  # pragma: no cover
 __all__: Sequence[str] = ("plot", "save", "summary")
 __version__: str = "0.2.0"
 
+if torch is not None and Image is not None:
+    type TensorLike = torch.Tensor | np.ndarray | Image.Image
+elif torch is not None:
+    type TensorLike = torch.Tensor | np.ndarray
+elif Image is not None:
+    type TensorLike = np.ndarray | Image.Image
+else:
+    type TensorLike = np.ndarray
 
-def _is_sequence_of_tensors(x: Any) -> bool:
-    """Check if x is a list/tuple of tensors, arrays, or PIL Images."""
+
+def _is_sequence_of_tensors(x: TensorLike | Sequence[TensorLike]) -> bool:
+    """Check if x is a list/tuple of torch.Tensor, np.ndarray, or PIL.Image."""
     if not isinstance(x, (list, tuple)):
         return False
     if len(x) == 0:
@@ -57,47 +66,46 @@ def _is_sequence_of_tensors(x: Any) -> bool:
     return True
 
 
-def _pad_to_common_size(arrays: List[np.ndarray]) -> List[np.ndarray]:
-    """Pad arrays to have the same height and width (last two dimensions)."""
-    if len(arrays) == 0:
-        return arrays
+def _pad_to_common_size(tensors: List[np.ndarray]) -> List[np.ndarray]:
+    """Pad tensors to have the same height and width (last two dimensions)."""
+    if len(tensors) == 0:
+        return tensors
 
-    # Find maximum dimensions
-    max_h = max(arr.shape[-2] for arr in arrays)
-    max_w = max(arr.shape[-1] for arr in arrays)
+    max_h = max(tensor.shape[-2] for tensor in tensors)
+    max_w = max(tensor.shape[-1] for tensor in tensors)
 
-    padded_arrays = []
-    for arr in arrays:
-        if arr.ndim == 2:
-            h, w = arr.shape
+    padded_tensors = []
+    for tensor in tensors:
+        if tensor.ndim == 2:
+            h, w = tensor.shape
             pad_h = max_h - h
             pad_w = max_w - w
             # Pad with zeros (black) on bottom and right
-            padded = np.pad(arr, ((0, pad_h), (0, pad_w)), mode="constant", constant_values=0)
-        elif arr.ndim == 3:
-            if arr.shape[0] in (1, 3):  # CHW format
-                c, h, w = arr.shape
+            padded_tensor = np.pad(tensor, ((0, pad_h), (0, pad_w)), mode="constant", constant_values=0)
+        elif tensor.ndim == 3:
+            if tensor.shape[0] in (1, 3):  # CHW format
+                c, h, w = tensor.shape
                 pad_h = max_h - h
                 pad_w = max_w - w
-                padded = np.pad(arr, ((0, 0), (0, pad_h), (0, pad_w)), mode="constant", constant_values=0)
+                padded_tensor = np.pad(tensor, ((0, 0), (0, pad_h), (0, pad_w)), mode="constant", constant_values=0)
             else:  # HWC format
-                h, w, c = arr.shape
+                h, w, c = tensor.shape
                 pad_h = max_h - h
                 pad_w = max_w - w
-                padded = np.pad(arr, ((0, pad_h), (0, pad_w), (0, 0)), mode="constant", constant_values=0)
+                padded_tensor = np.pad(tensor, ((0, pad_h), (0, pad_w), (0, 0)), mode="constant", constant_values=0)
         else:
-            raise ValueError(f"Expected 2D or 3D arrays, got {arr.ndim}D")
+            raise ValueError(f"Expected 2D or 3D tensors, got {tensor.ndim}D")
 
-        padded_arrays.append(padded)
-    return padded_arrays
+        padded_tensors.append(padded_tensor)
+    return padded_tensors
 
 
-def _to_numpy(x: Any) -> np.ndarray:
+def _to_numpy(x: TensorLike | Sequence[TensorLike]) -> np.ndarray:
     """Convert x to NumPy array, detaching from torch if needed. Handles lists/sequences of tensors."""
     # Handle lists/sequences of tensors
     if _is_sequence_of_tensors(x):
         # Convert each item to numpy and validate dimensions
-        arrays = []
+        tensors = []
         for item in x:
             if torch is not None and isinstance(item, torch.Tensor):
                 arr = item.detach().cpu().numpy()
@@ -115,22 +123,18 @@ def _to_numpy(x: Any) -> np.ndarray:
                     f"Each tensor in list must be 2D or 3D after squeezing, got {arr.ndim}D with shape {arr.shape}"
                 )
 
-            arrays.append(arr)
+            tensors.append(arr)
 
-        # Pad arrays to common size
-        arrays = _pad_to_common_size(arrays)
-
-        # Stack arrays to create a batch dimension
-        # All arrays should now have the same shape
-        stacked = np.stack(arrays, axis=0)  # Creates (B, ...) format
-        return stacked
+        tensors = _pad_to_common_size(tensors)
+        stacked_tensor = np.stack(tensors, axis=0)  # Creates (B, ...) format
+        return stacked_tensor
 
     # Handle single tensor/array/image
     if torch is not None and isinstance(x, torch.Tensor):
         x = x.detach().cpu().numpy()
     elif Image is not None and isinstance(x, Image.Image):
-        # Convert PIL Image to numpy array
         x = np.array(x)
+
     if not isinstance(x, np.ndarray):
         raise TypeError("Expected torch.Tensor | np.ndarray | PIL.Image | sequence of these types")
     return x
@@ -148,55 +152,55 @@ def _to_hwc(arr: np.ndarray) -> np.ndarray:
     raise ValueError(f"Unsupported dimensionality for _to_hwc: {arr.shape}")
 
 
-def _prep(arr: np.ndarray) -> np.ndarray:
+def _prep(numpy_arr: np.ndarray) -> np.ndarray:
     """Prepare array for visualization by:
     - Squeezing singleton dimensions
     - Converting 2D/3D arrays to HWC format using _to_hwc
     - Ensuring 4D arrays are in BHWC format
     - Raising error for unsupported shapes
     """
-    arr = arr.squeeze()
-    if arr.ndim == 2:
-        return arr
-    if arr.ndim == 3:
+    numpy_arr = numpy_arr.squeeze()
+    if numpy_arr.ndim == 2:
+        return numpy_arr
+    if numpy_arr.ndim == 3:
         # Special handling for ambiguous (3, H, W) case
-        if arr.shape[0] == 3:
-            format_type = smart_3d_format_detection(arr)
+        if numpy_arr.shape[0] == 3:
+            format_type = smart_3d_format_detection(numpy_arr)
             if format_type == "rgb":
                 # Treat as single RGB image: (3, H, W) -> (H, W, 3)
-                return np.transpose(arr, (1, 2, 0))
+                return np.transpose(numpy_arr, (1, 2, 0))
             else:
                 # Treat as batch: (3, H, W) -> (3, H, W, 1) -> continue to 4D handling
-                return arr[:, :, :, np.newaxis]  # Add channel dimension
+                return numpy_arr[:, :, :, np.newaxis]  # Add channel dimension
         else:
             # Non-ambiguous 3D case
-            return _to_hwc(arr)
+            return _to_hwc(numpy_arr)
 
-    if arr.ndim == 4:
+    if numpy_arr.ndim == 4:
         # Handle the ambiguous (3, 3, H, W) case
-        if arr.shape[0] == 3 and arr.shape[1] == 3:
-            format_type = smart_4d_format_detection(arr)
+        if numpy_arr.shape[0] == 3 and numpy_arr.shape[1] == 3:
+            format_type = smart_4d_format_detection(numpy_arr)
             if format_type == "CBHW":
                 # Convert C,B,H,W -> B,H,W,C
-                arr = np.transpose(arr, (1, 2, 3, 0))
+                numpy_arr = np.transpose(numpy_arr, (1, 2, 3, 0))
             else:
                 # Convert B,C,H,W -> B,H,W,C
-                arr = np.transpose(arr, (0, 2, 3, 1))
-            return arr
+                numpy_arr = np.transpose(numpy_arr, (0, 2, 3, 1))
+            return numpy_arr
 
         # Non-ambiguous 4D cases
         # try B,C,H,W
-        if arr.shape[1] in (1, 3):
+        if numpy_arr.shape[1] in (1, 3):
             # Convert B,C,H,W -> B,H,W,C
-            arr = np.transpose(arr, (0, 2, 3, 1))
-            return arr
+            numpy_arr = np.transpose(numpy_arr, (0, 2, 3, 1))
+            return numpy_arr
         # else maybe C,B,H,W
-        if arr.shape[0] in (1, 3):
+        if numpy_arr.shape[0] in (1, 3):
             # Convert C,B,H,W -> B,H,W,C
-            arr = np.transpose(arr, (1, 2, 3, 0))
-            return arr
+            numpy_arr = np.transpose(numpy_arr, (1, 2, 3, 0))
+            return numpy_arr
 
-    raise ValueError(f"Cannot prepare array with shape {arr.shape}")
+    raise ValueError(f"Cannot prepare array with shape {numpy_arr.shape}")
 
 
 def _make_grid(bhwc: np.ndarray) -> np.ndarray:
@@ -236,39 +240,39 @@ def _make_grid(bhwc: np.ndarray) -> np.ndarray:
     return canvas
 
 
-def _convert_float_to_int(arr: np.ndarray) -> np.ndarray:
+def _convert_float_to_int(numpy_arr: np.ndarray) -> np.ndarray:
     """Convert float arrays with values in 0-255 range to uint8."""
-    if arr.dtype.kind == "f":  # float type
-        arr_min, arr_max = arr.min(), arr.max()
+    if numpy_arr.dtype.kind == "f":  # float type
+        arr_min, arr_max = numpy_arr.min(), numpy_arr.max()
         # Only convert if values are clearly in 0-255 range, not 0-1 range
         # We check if max > 1.5 to distinguish from normalized 0-1 arrays
         if arr_min >= -0.5 and arr_max > 1.5 and arr_max <= 255.5:
-            return np.clip(np.round(arr), 0, 255).astype(np.uint8)
-    return arr
+            return np.clip(np.round(numpy_arr), 0, 255).astype(np.uint8)
+    return numpy_arr
 
 
-def _prepare_for_display(arr: np.ndarray) -> np.ndarray:
-    arr = _prep(arr)
-    if arr.ndim == 4:
-        arr = _make_grid(arr)
-    arr = _convert_float_to_int(arr)
-    return arr
+def _prepare_for_display(numpy_arr: np.ndarray) -> np.ndarray:
+    numpy_arr = _prep(numpy_arr)
+    if numpy_arr.ndim == 4:
+        numpy_arr = _make_grid(numpy_arr)
+    numpy_arr = _convert_float_to_int(numpy_arr)
+    return numpy_arr
 
 
-def _create_figure(tensor: Any, **imshow_kwargs) -> plt.Figure:
+def _create_figure(tensor: TensorLike | Sequence[TensorLike], **imshow_kwargs) -> plt.Figure:
     """Create a matplotlib figure from tensor."""
-    arr = _to_numpy(tensor)
-    arr = _prepare_for_display(arr)
+    numpy_arr = _to_numpy(tensor)
+    numpy_arr = _prepare_for_display(numpy_arr)
 
     # Set figure size to match exact pixel dimensions
-    h, w = arr.shape[:2]
+    h, w = numpy_arr.shape[:2]
     dpi = 100
     fig, ax = plt.subplots(figsize=(w / dpi, h / dpi), dpi=dpi)
 
-    if arr.ndim == 2 or arr.shape[2] == 1:
-        ax.imshow(arr.squeeze(), cmap="gray", **imshow_kwargs)
+    if numpy_arr.ndim == 2 or numpy_arr.shape[2] == 1:
+        ax.imshow(numpy_arr.squeeze(), cmap="gray", **imshow_kwargs)
     else:
-        ax.imshow(arr, **imshow_kwargs)
+        ax.imshow(numpy_arr, **imshow_kwargs)
     ax.axis("off")
 
     # Remove all padding to ensure exact pixel dimensions
@@ -276,7 +280,7 @@ def _create_figure(tensor: Any, **imshow_kwargs) -> plt.Figure:
     return fig
 
 
-def plot(tensor: Any, **imshow_kwargs) -> plt.Figure:
+def plot(tensor: TensorLike | Sequence[TensorLike], **imshow_kwargs) -> plt.Figure:
     """
     Display *tensor* using Matplotlib.
 
@@ -334,7 +338,7 @@ def save(path_or_tensor: Any, tensor: Any | None = None, **imshow_kwargs) -> str
     return path
 
 
-def summary(tensor: Any) -> None:
+def summary(tensor: TensorLike | Sequence[TensorLike]) -> None:
     """
     Print summary information about a tensor or array.
 
