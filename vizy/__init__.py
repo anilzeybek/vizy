@@ -71,33 +71,33 @@ def _pad_to_common_size(numpy_arrays: List[np.ndarray]) -> List[np.ndarray]:
     if len(numpy_arrays) == 0:
         return numpy_arrays
 
-    max_h = max(tensor.shape[-2] for tensor in numpy_arrays)
-    max_w = max(tensor.shape[-1] for tensor in numpy_arrays)
+    max_h = max(arr.shape[-2] for arr in numpy_arrays)
+    max_w = max(arr.shape[-1] for arr in numpy_arrays)
 
-    padded_tensors = []
-    for tensor in numpy_arrays:
-        if tensor.ndim == 2:
-            h, w = tensor.shape
+    padded_arrays = []
+    for arr in numpy_arrays:
+        if arr.ndim == 2:
+            h, w = arr.shape
             pad_h = max_h - h
             pad_w = max_w - w
             # Pad with zeros (black) on bottom and right
-            padded_tensor = np.pad(tensor, ((0, pad_h), (0, pad_w)), mode="constant", constant_values=0)
-        elif tensor.ndim == 3:
-            if tensor.shape[0] in (1, 3):  # CHW format
-                c, h, w = tensor.shape
+            padded_arr = np.pad(arr, ((0, pad_h), (0, pad_w)), mode="constant", constant_values=0)
+        elif arr.ndim == 3:
+            if arr.shape[0] in (1, 3):  # CHW format
+                c, h, w = arr.shape
                 pad_h = max_h - h
                 pad_w = max_w - w
-                padded_tensor = np.pad(tensor, ((0, 0), (0, pad_h), (0, pad_w)), mode="constant", constant_values=0)
+                padded_arr = np.pad(arr, ((0, 0), (0, pad_h), (0, pad_w)), mode="constant", constant_values=0)
             else:  # HWC format
-                h, w, c = tensor.shape
+                h, w, c = arr.shape
                 pad_h = max_h - h
                 pad_w = max_w - w
-                padded_tensor = np.pad(tensor, ((0, pad_h), (0, pad_w), (0, 0)), mode="constant", constant_values=0)
+                padded_arr = np.pad(arr, ((0, pad_h), (0, pad_w), (0, 0)), mode="constant", constant_values=0)
         else:
-            raise ValueError(f"Expected 2D or 3D tensors, got {tensor.ndim}D")
+            raise ValueError(f"Expected 2D or 3D arrays, got {arr.ndim}D")
 
-        padded_tensors.append(padded_tensor)
-    return padded_tensors
+        padded_arrays.append(padded_arr)
+    return padded_arrays
 
 
 def _to_numpy(x: TensorLike | Sequence[TensorLike]) -> np.ndarray:
