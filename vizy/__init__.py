@@ -67,34 +67,38 @@ def _is_sequence_of_tensors(x: TensorLike | Sequence[TensorLike]) -> bool:
 
 
 def _pad_to_common_size(numpy_arrays: List[np.ndarray]) -> List[np.ndarray]:
-    """Pad tensors to have the same height and width (last two dimensions)."""
+    """Pad numpy arrays to have the same height and width dimensions."""
     if len(numpy_arrays) == 0:
         return numpy_arrays
 
-    max_h = max(arr.shape[-2] for arr in numpy_arrays)
-    max_w = max(arr.shape[-1] for arr in numpy_arrays)
-
-    padded_arrays = []
+    hw_pairs = []
     for arr in numpy_arrays:
         if arr.ndim == 2:
             h, w = arr.shape
-            pad_h = max_h - h
-            pad_w = max_w - w
-            # Pad with zeros (black) on bottom and right
+        elif arr.ndim == 3:
+            if arr.shape[0] in (1, 3):
+                h, w = arr.shape[1], arr.shape[2]
+            else:  # HWC format
+                h, w = arr.shape[0], arr.shape[1]
+        else:
+            raise ValueError(f"Expected 2D or 3D arrays, got {arr.ndim}D")
+        hw_pairs.append((h, w))
+
+    max_h = max(h for h, _ in hw_pairs)
+    max_w = max(w for _, w in hw_pairs)
+
+    padded_arrays = []
+    for arr, (h, w) in zip(numpy_arrays, hw_pairs):
+        pad_h = max_h - h
+        pad_w = max_w - w
+
+        if arr.ndim == 2:
             padded_arr = np.pad(arr, ((0, pad_h), (0, pad_w)), mode="constant", constant_values=0)
         elif arr.ndim == 3:
             if arr.shape[0] in (1, 3):  # CHW format
-                c, h, w = arr.shape
-                pad_h = max_h - h
-                pad_w = max_w - w
                 padded_arr = np.pad(arr, ((0, 0), (0, pad_h), (0, pad_w)), mode="constant", constant_values=0)
             else:  # HWC format
-                h, w, c = arr.shape
-                pad_h = max_h - h
-                pad_w = max_w - w
                 padded_arr = np.pad(arr, ((0, pad_h), (0, pad_w), (0, 0)), mode="constant", constant_values=0)
-        else:
-            raise ValueError(f"Expected 2D or 3D arrays, got {arr.ndim}D")
 
         padded_arrays.append(padded_arr)
     return padded_arrays
