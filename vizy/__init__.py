@@ -181,6 +181,10 @@ def _prep(numpy_arr: np.ndarray) -> np.ndarray:
             return _to_hwc(numpy_arr)
 
     if numpy_arr.ndim == 4:
+        # Check if already in BHWC format (channels last)
+        if numpy_arr.shape[3] in (1, 3):
+            return numpy_arr
+
         # Handle the ambiguous (3, 3, H, W) case
         if numpy_arr.shape[0] == 3 and numpy_arr.shape[1] == 3:
             format_type = smart_4d_format_detection(numpy_arr)
