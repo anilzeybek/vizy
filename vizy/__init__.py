@@ -24,7 +24,7 @@ from typing import List, Sequence
 import matplotlib.pyplot as plt
 import numpy as np
 
-from .format_detection import smart_3d_format_detection, smart_4d_format_detection
+from vizy import format_detection
 
 try:
     import torch  # type: ignore
@@ -141,44 +141,35 @@ def _to_numpy(x: TensorLike | Sequence[TensorLike]) -> np.ndarray:
     return x
 
 
-def _to_hwc(arr: np.ndarray) -> np.ndarray:
-    """Ensure array is HxW or HxWxC where C in {1,3}."""
-    if arr.ndim == 2:  # already HxW
-        return arr
-    if arr.ndim == 3:
-        # if channels first
-        if arr.shape[0] in (1, 3) and arr.shape[-1] not in (1, 3):
-            arr = np.transpose(arr, (1, 2, 0))
-        return arr
-    raise ValueError(f"Unsupported dimensionality for _to_hwc: {arr.shape}")
-
-
-def _prep(numpy_arr: np.ndarray) -> np.ndarray:
+def convert_to_bhwc_or_hwc(numpy_arr: np.ndarray) -> np.ndarray:
     """Convert any given numpy array to BHWC or HWC format."""
     numpy_arr = numpy_arr.squeeze()
+
     if numpy_arr.ndim == 2:
         return numpy_arr
     if numpy_arr.ndim == 3:
-        # Special handling for ambiguous (3, H, W) case
-        if numpy_arr.shape[0] == 3:
-            format_type = smart_3d_format_detection(numpy_arr)
+        if numpy_arr.shape[0] == 3:  # Special handling for ambiguous (3, H, W) case
+            format_type = format_detection.smart_3d_format_detection(numpy_arr)
             if format_type == "rgb":
                 # Treat as single RGB image: (3, H, W) -> (H, W, 3)
                 return np.transpose(numpy_arr, (1, 2, 0))
             else:
                 # Treat as batch: (3, H, W) -> (3, H, W, 1) -> continue to 4D handling
                 return numpy_arr[:, :, :, np.newaxis]  # Add channel dimension
-        else:
-            # Non-ambiguous 3D case
-            return _to_hwc(numpy_arr)
+        else:  # Non-ambiguous (H,W,C) case
+            if numpy_arr.shape[0] == 3 and numpy_arr.shape[-1] != 3:
+                numpy_arr = np.transpose(numpy_arr, (1, 2, 0))
+            return numpy_arr
+
+        # TODO: Handle (B,H,W) and (H,W,B) cases
     if numpy_arr.ndim == 4:
         # Check if already in BHWC format (channels last)
-        if numpy_arr.shape[3] in (1, 3):
+        if numpy_arr.shape[3] == 3:
             return numpy_arr
 
         # Handle the ambiguous (3, 3, H, W) case
         if numpy_arr.shape[0] == 3 and numpy_arr.shape[1] == 3:
-            format_type = smart_4d_format_detection(numpy_arr)
+            format_type = format_detection.smart_4d_format_detection(numpy_arr)
             if format_type == "CBHW":
                 # Convert C,B,H,W -> B,H,W,C
                 numpy_arr = np.transpose(numpy_arr, (1, 2, 3, 0))
@@ -189,12 +180,12 @@ def _prep(numpy_arr: np.ndarray) -> np.ndarray:
 
         # Non-ambiguous 4D cases
         # try B,C,H,W
-        if numpy_arr.shape[1] in (1, 3):
+        if numpy_arr.shape[1] == 3:
             # Convert B,C,H,W -> B,H,W,C
             numpy_arr = np.transpose(numpy_arr, (0, 2, 3, 1))
             return numpy_arr
         # else maybe C,B,H,W
-        if numpy_arr.shape[0] in (1, 3):
+        if numpy_arr.shape[0] == 3:
             # Convert C,B,H,W -> B,H,W,C
             numpy_arr = np.transpose(numpy_arr, (1, 2, 3, 0))
             return numpy_arr
@@ -251,7 +242,7 @@ def _convert_float_to_int(numpy_arr: np.ndarray) -> np.ndarray:
 
 
 def _prepare_for_display(numpy_arr: np.ndarray) -> np.ndarray:
-    numpy_arr = _prep(numpy_arr)
+    numpy_arr = convert_to_bhwc_or_hwc(numpy_arr)
     if numpy_arr.ndim == 4:
         numpy_arr = _make_grid(numpy_arr)
     numpy_arr = _convert_float_to_int(numpy_arr)
