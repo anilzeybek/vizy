@@ -1,7 +1,53 @@
 import numpy as np
+import enum
 
 
-def smart_3d_format_detection(arr: np.ndarray) -> str:
+class Array3DFormat(enum.Enum):
+    """Enum representing possible formats for 3D numpy arrays."""
+
+    HW3 = enum.auto()  # Height, Width, 3 channels
+    _3HW = enum.auto()  # 3 channels, Height, Width
+    BHW = enum.auto()  # Batch, Height, Width
+    HWB = enum.auto()  # Height, Width, Batch
+
+
+def detect_3d_array_format(arr: np.ndarray) -> Array3DFormat:
+    """Determines whether the array is in HWC, CHW, BHW, or HWB format."""
+    if arr.ndim != 3:
+        raise ValueError(f"Expected 3D array, got {arr.ndim}D")
+
+    d0, d1, d2 = arr.shape
+    # If any dimension is 3, it's likely a channel dimension
+    # If any dimension is much larger than others, it's likely spatial (H or W)
+    # Check for obvious channel dimensions
+    channel_dim = None
+    for i in range(3):
+        if arr.shape[i] == 3:
+            channel_dim = i
+            break
+    if channel_dim is not None:
+        if channel_dim == 0:
+            # Ambiguous case: (3, H, W) could be 3 channels or 3 batch items
+            # Use smart_3d_format_detection to distinguish
+            format_type = _ambiguous_3d_format_detection(arr)
+            if format_type == "rgb":
+                return Array3DFormat._3HW  # 3 color channels
+            else:
+                return Array3DFormat.BHW  # 3 batch items
+        elif channel_dim == 1:
+            return Array3DFormat.HWB if d2 > d1 else Array3DFormat.BHW
+        else:
+            return Array3DFormat.HW3
+
+    else:
+        # Then it's either (H,W,B) or (B,H,W)
+        if d0 < d1 and d0 < d2:
+            return Array3DFormat.BHW
+        else:
+            return Array3DFormat.HWB
+
+
+def _ambiguous_3d_format_detection(arr: np.ndarray) -> str:
     """
     Smart detection for ambiguous (3, H, W) tensors.
     Returns 'rgb' if likely RGB image, 'batch' if likely 3 grayscale images.

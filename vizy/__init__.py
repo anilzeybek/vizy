@@ -141,31 +141,26 @@ def _to_numpy(x: TensorLike | Sequence[TensorLike]) -> np.ndarray:
     return x
 
 
-def convert_to_bhwc_or_hwc(numpy_arr: np.ndarray) -> np.ndarray:
-    """Convert any given numpy array to BHWC or HWC format."""
+def _normalize_array_format(numpy_arr: np.ndarray) -> tuple[np.ndarray, bool]:
+    """Convert any given numpy array to HW/BHW/HWC/BHWC format and return whether it requires grid layout."""
     numpy_arr = numpy_arr.squeeze()
 
     if numpy_arr.ndim == 2:
-        return numpy_arr
+        return numpy_arr, False
     if numpy_arr.ndim == 3:
-        if numpy_arr.shape[0] == 3:  # Special handling for ambiguous (3, H, W) case
-            format_type = format_detection.smart_3d_format_detection(numpy_arr)
-            if format_type == "rgb":
-                # Treat as single RGB image: (3, H, W) -> (H, W, 3)
-                return np.transpose(numpy_arr, (1, 2, 0))
-            else:
-                # Treat as batch: (3, H, W) -> (3, H, W, 1) -> continue to 4D handling
-                return numpy_arr[:, :, :, np.newaxis]  # Add channel dimension
-        else:  # Non-ambiguous (H,W,C) case
-            if numpy_arr.shape[0] == 3 and numpy_arr.shape[-1] != 3:
-                numpy_arr = np.transpose(numpy_arr, (1, 2, 0))
-            return numpy_arr
-
-        # TODO: Handle (B,H,W) and (H,W,B) cases
+        format_type = format_detection.detect_3d_array_format(numpy_arr)
+        if format_type == format_detection.Array3DFormat.HW3:
+            return numpy_arr, False
+        if format_type == format_detection.Array3DFormat._3HW:
+            return numpy_arr.transpose(1, 2, 0), False
+        if format_type == format_detection.Array3DFormat.BHW:
+            return numpy_arr, True
+        if format_type == format_detection.Array3DFormat.HWB:
+            return numpy_arr.transpose(2, 0, 1), True
     if numpy_arr.ndim == 4:
         # Check if already in BHWC format (channels last)
         if numpy_arr.shape[3] == 3:
-            return numpy_arr
+            return numpy_arr, True
 
         # Handle the ambiguous (3, 3, H, W) case
         if numpy_arr.shape[0] == 3 and numpy_arr.shape[1] == 3:
@@ -176,25 +171,25 @@ def convert_to_bhwc_or_hwc(numpy_arr: np.ndarray) -> np.ndarray:
             else:
                 # Convert B,C,H,W -> B,H,W,C
                 numpy_arr = np.transpose(numpy_arr, (0, 2, 3, 1))
-            return numpy_arr
+            return numpy_arr, True
 
         # Non-ambiguous 4D cases
         # try B,C,H,W
         if numpy_arr.shape[1] == 3:
             # Convert B,C,H,W -> B,H,W,C
             numpy_arr = np.transpose(numpy_arr, (0, 2, 3, 1))
-            return numpy_arr
+            return numpy_arr, True
         # else maybe C,B,H,W
         if numpy_arr.shape[0] == 3:
             # Convert C,B,H,W -> B,H,W,C
             numpy_arr = np.transpose(numpy_arr, (1, 2, 3, 0))
-            return numpy_arr
+            return numpy_arr, True
 
     raise ValueError(f"Cannot prepare array with shape {numpy_arr.shape}")
 
 
-def _make_grid(bhwc: np.ndarray) -> np.ndarray:
-    """Make grid image from BxHxWxC array.
+def _make_grid(numpy_arr: np.ndarray) -> np.ndarray:
+    """Make grid image from BHWC/BHW array.
 
     Arranges multiple images in a grid layout with the following properties:
     - Single image remains unchanged
@@ -204,7 +199,11 @@ def _make_grid(bhwc: np.ndarray) -> np.ndarray:
     - Maintains original image dimensions and channels
     - Uses black background for empty grid positions
     """
-    b, h, w, c = bhwc.shape
+    if numpy_arr.ndim == 4:
+        b, h, w, c = numpy_arr.shape
+    else:
+        b, h, w = numpy_arr.shape
+        c = 1
 
     # Create a more compact grid layout
     # For small batch sizes, prefer horizontal layout, except for 4 images (2x2)
@@ -222,15 +221,17 @@ def _make_grid(bhwc: np.ndarray) -> np.ndarray:
         grid_rows = math.ceil(b / grid_cols)
 
     # canvas initialised to zeros (black background)
-    canvas = np.zeros((h * grid_rows, w * grid_cols, c), dtype=bhwc.dtype)
+    canvas = np.zeros((h * grid_rows, w * grid_cols, c), dtype=numpy_arr.dtype)
     for idx in range(b):
         row, col = divmod(idx, grid_cols)
-        img = bhwc[idx]  # Already in HWC format
+        img = numpy_arr[idx]
+        if img.ndim == 2:
+            img = img[..., np.newaxis]
         canvas[row * h : (row + 1) * h, col * w : (col + 1) * w, :] = img
     return canvas
 
 
-def _convert_float_to_int(numpy_arr: np.ndarray) -> np.ndarray:
+def _convert_float_arr_to_int_arr(numpy_arr: np.ndarray) -> np.ndarray:
     """Convert float arrays with values in 0-255 range to uint8."""
     if numpy_arr.dtype.kind == "f":  # float type
         arr_min, arr_max = numpy_arr.min(), numpy_arr.max()
@@ -241,18 +242,18 @@ def _convert_float_to_int(numpy_arr: np.ndarray) -> np.ndarray:
     return numpy_arr
 
 
-def _prepare_for_display(numpy_arr: np.ndarray) -> np.ndarray:
-    numpy_arr = convert_to_bhwc_or_hwc(numpy_arr)
-    if numpy_arr.ndim == 4:
+def _to_plottable_int_arr(numpy_arr: np.ndarray) -> np.ndarray:
+    numpy_arr, requires_grid = _normalize_array_format(numpy_arr)
+    if requires_grid:
         numpy_arr = _make_grid(numpy_arr)
-    numpy_arr = _convert_float_to_int(numpy_arr)
+    numpy_arr = _convert_float_arr_to_int_arr(numpy_arr)
     return numpy_arr
 
 
 def _create_figure(tensor: TensorLike | Sequence[TensorLike], **imshow_kwargs) -> plt.Figure:
     """Create a matplotlib figure from tensor."""
     numpy_arr = _to_numpy(tensor)
-    numpy_arr = _prepare_for_display(numpy_arr)
+    numpy_arr = _to_plottable_int_arr(numpy_arr)
 
     # Set figure size to match exact pixel dimensions
     h, w = numpy_arr.shape[:2]
