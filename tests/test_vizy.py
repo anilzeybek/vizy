@@ -53,7 +53,7 @@ class TestNormalizeArrayFormat:
 
     def test_invalid_dimensions(self):
         """Test that arrays with unsupported dimensions raise ValueError."""
-        with pytest.raises(ValueError, match="Cannot prepare array"):
+        with pytest.raises(ValueError, match="Unable to determine 4D array format"):
             vizy._normalize_array_format(np.random.rand(10, 20, 30, 40))
 
         with pytest.raises(ValueError, match="Cannot prepare array"):
@@ -123,7 +123,7 @@ class TestPrep:
         """Test that invalid 4D shapes raise ValueError."""
         # Neither dimension 0 nor 1 is a valid channel count
         arr = np.random.rand(5, 7, 50, 60)
-        with pytest.raises(ValueError, match="Cannot prepare array"):
+        with pytest.raises(ValueError, match="Unable to determine 4D array format"):
             vizy._normalize_array_format(arr)
 
     def test_invalid_dimensions(self):
