@@ -47,3 +47,6 @@ dev = [
     "Pillow",
     "imagehash>=4.3.2",
 ]
+
+[tool.ruff]
+line-length = 120
