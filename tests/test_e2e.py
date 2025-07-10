@@ -8,24 +8,32 @@ import torch
 import vizy
 
 
-def get_test_image_path() -> str:
-    return "tests/data/input/test_image.jpg"
+def get_test_image0_path() -> str:
+    return "tests/data/input/test_image0.jpg"
 
 
-def get_test_image_grayscale_path() -> str:
-    return "tests/data/input/test_image_grayscale.jpg"
+def get_test_image0_grayscale_path() -> str:
+    return "tests/data/input/test_image0_grayscale.jpg"
 
 
-def get_test_image_2_path() -> str:
-    return "tests/data/input/test_image_2.jpg"
+def get_test_image1_path() -> str:
+    return "tests/data/input/test_image1.jpg"
 
 
-def get_test_image_3_path() -> str:
-    return "tests/data/input/test_image_3.jpg"
+def get_test_image2_path() -> str:
+    return "tests/data/input/test_image2.jpg"
 
 
-def get_test_image() -> np.ndarray:
-    return image_path_to_array(get_test_image_path())
+def get_test_image0() -> np.ndarray:
+    return image_path_to_array(get_test_image0_path())
+
+
+def get_test_image1() -> np.ndarray:
+    return image_path_to_array(get_test_image1_path())
+
+
+def get_test_image2() -> np.ndarray:
+    return image_path_to_array(get_test_image2_path())
 
 
 def image_path_to_array(image_path: str) -> np.ndarray:
