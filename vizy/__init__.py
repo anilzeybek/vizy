@@ -147,6 +147,7 @@ def _normalize_array_format(numpy_arr: np.ndarray) -> tuple[np.ndarray, bool]:
 
     if numpy_arr.ndim == 2:
         return numpy_arr, False
+
     if numpy_arr.ndim == 3:
         format_type = format_detection.detect_3d_array_format(numpy_arr)
         if format_type == format_detection.Array3DFormat.HW3:
@@ -157,33 +158,19 @@ def _normalize_array_format(numpy_arr: np.ndarray) -> tuple[np.ndarray, bool]:
             return numpy_arr, True
         if format_type == format_detection.Array3DFormat.HWB:
             return numpy_arr.transpose(2, 0, 1), True
+
     if numpy_arr.ndim == 4:
-        # Check if already in BHWC format (channels last)
-        if numpy_arr.shape[3] == 3:
+        format_type = format_detection.detect_4d_array_format(numpy_arr)
+        if format_type == format_detection.Array4DFormat.HW3B:
+            return numpy_arr.transpose(3, 0, 1, 2), True
+        if format_type == format_detection.Array4DFormat._3HWB:
+            return numpy_arr.transpose(3, 1, 2, 0), True
+        if format_type == format_detection.Array4DFormat.BHW3:
             return numpy_arr, True
-
-        # Handle the ambiguous (3, 3, H, W) case
-        if numpy_arr.shape[0] == 3 and numpy_arr.shape[1] == 3:
-            format_type = format_detection.smart_4d_format_detection(numpy_arr)
-            if format_type == "CBHW":
-                # Convert C,B,H,W -> B,H,W,C
-                numpy_arr = np.transpose(numpy_arr, (1, 2, 3, 0))
-            else:
-                # Convert B,C,H,W -> B,H,W,C
-                numpy_arr = np.transpose(numpy_arr, (0, 2, 3, 1))
-            return numpy_arr, True
-
-        # Non-ambiguous 4D cases
-        # try B,C,H,W
-        if numpy_arr.shape[1] == 3:
-            # Convert B,C,H,W -> B,H,W,C
-            numpy_arr = np.transpose(numpy_arr, (0, 2, 3, 1))
-            return numpy_arr, True
-        # else maybe C,B,H,W
-        if numpy_arr.shape[0] == 3:
-            # Convert C,B,H,W -> B,H,W,C
-            numpy_arr = np.transpose(numpy_arr, (1, 2, 3, 0))
-            return numpy_arr, True
+        if format_type == format_detection.Array4DFormat.B3HW:
+            return numpy_arr.transpose(0, 2, 3, 1), True
+        if format_type == format_detection.Array4DFormat._3BHW:
+            return numpy_arr.transpose(1, 2, 3, 0), True
 
     raise ValueError(f"Cannot prepare array with shape {numpy_arr.shape}")
 
