@@ -1,1 +1,1 @@
-# Tests for vizy package 
+# Tests for vizy package
