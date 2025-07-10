@@ -5,8 +5,8 @@ import enum
 class Array3DFormat(enum.Enum):
     """Enum representing possible formats for 3D numpy arrays."""
 
-    HW3 = enum.auto()  # Height, Width, 3 channels
-    _3HW = enum.auto()  # 3 channels, Height, Width
+    HWC = enum.auto()  # Height, Width, 3 channels
+    CHW = enum.auto()  # 3 channels, Height, Width
     BHW = enum.auto()  # Batch, Height, Width
     HWB = enum.auto()  # Height, Width, Batch
 
@@ -14,11 +14,11 @@ class Array3DFormat(enum.Enum):
 class Array4DFormat(enum.Enum):
     """Enum representing possible formats for 4D numpy arrays."""
 
-    HW3B = enum.auto()  # Height, Width, 3 channels, Batch
-    _3HWB = enum.auto()  # 3 channels, Height, Width, Batch
-    BHW3 = enum.auto()  # Batch, Height, Width, 3 channels
-    B3HW = enum.auto()  # Batch, 3 channels, Height, Width
-    _3BHW = enum.auto()  # 3 channels, Batch, Height, Width
+    HWCB = enum.auto()  # Height, Width, 3 channels, Batch
+    CHWB = enum.auto()  # 3 channels, Height, Width, Batch
+    BHWC = enum.auto()  # Batch, Height, Width, 3 channels
+    BCHW = enum.auto()  # Batch, 3 channels, Height, Width
+    CBHW = enum.auto()  # 3 channels, Batch, Height, Width
 
 
 def detect_3d_array_format(arr: np.ndarray) -> Array3DFormat:
@@ -41,13 +41,13 @@ def detect_3d_array_format(arr: np.ndarray) -> Array3DFormat:
             # Use smart_3d_format_detection to distinguish
             format_type = _ambiguous_3d_format_detection(arr)
             if format_type == "rgb":
-                return Array3DFormat._3HW  # 3 color channels
+                return Array3DFormat.CHW  # 3 color channels
             else:
                 return Array3DFormat.BHW  # 3 batch items
         elif channel_dim == 1:
             return Array3DFormat.HWB if d2 > d1 else Array3DFormat.BHW
         else:
-            return Array3DFormat.HW3
+            return Array3DFormat.HWC
 
     else:
         # Then it's either (H,W,B) or (B,H,W)
