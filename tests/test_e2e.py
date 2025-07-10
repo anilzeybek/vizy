@@ -174,13 +174,15 @@ def test_chw1_torch():
 
 
 def test_2chw_torch():
-    image = torch.from_numpy(get_test_image()).permute(2, 0, 1)[None, ...]
-    image = torch.cat([image, image - 40], dim=0)
-    image = torch.clip(image, 0, 255)  # Ensure values stay in valid range
+    image0 = torch.from_numpy(get_test_image0()).permute(2, 0, 1)[None, ...]
+    image1 = torch.from_numpy(get_test_image1()).permute(2, 0, 1)[None, ...]
+    # Resize image1 to match image0's height and width.
+    image1 = torch.nn.functional.interpolate(image1, size=(image0.shape[2], image0.shape[3]), mode='bilinear')
+    image = torch.cat([image0, image1], dim=0)
 
     saved_image_path = vizy.save(image)
     try:
-        assert images_look_same(saved_image_path, get_test_image_2_path()), (
+        assert images_look_same(saved_image_path, 'tests/data/output/image0-image1.png'), (
             "The saved image does not match the original."
         )
     finally:
