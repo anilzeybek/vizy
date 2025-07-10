@@ -11,6 +11,16 @@ class Array3DFormat(enum.Enum):
     HWB = enum.auto()  # Height, Width, Batch
 
 
+class Array4DFormat(enum.Enum):
+    """Enum representing possible formats for 4D numpy arrays."""
+
+    HW3B = enum.auto()  # Height, Width, 3 channels, Batch
+    _3HWB = enum.auto()  # 3 channels, Height, Width, Batch
+    BHW3 = enum.auto()  # Batch, Height, Width, 3 channels
+    B3HW = enum.auto()  # Batch, 3 channels, Height, Width
+    _3BHW = enum.auto()  # 3 channels, Batch, Height, Width
+
+
 def detect_3d_array_format(arr: np.ndarray) -> Array3DFormat:
     """Determines whether the array is in HWC, CHW, BHW, or HWB format."""
     if arr.ndim != 3:
