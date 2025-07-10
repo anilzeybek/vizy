@@ -150,9 +150,9 @@ def _normalize_array_format(numpy_arr: np.ndarray) -> tuple[np.ndarray, bool]:
 
     if numpy_arr.ndim == 3:
         format_type = format_detection.detect_3d_array_format(numpy_arr)
-        if format_type == format_detection.Array3DFormat.HW3:
+        if format_type == format_detection.Array3DFormat.HWC:
             return numpy_arr, False
-        if format_type == format_detection.Array3DFormat._3HW:
+        if format_type == format_detection.Array3DFormat.CHW:
             return numpy_arr.transpose(1, 2, 0), False
         if format_type == format_detection.Array3DFormat.BHW:
             return numpy_arr, True
@@ -161,15 +161,15 @@ def _normalize_array_format(numpy_arr: np.ndarray) -> tuple[np.ndarray, bool]:
 
     if numpy_arr.ndim == 4:
         format_type = format_detection.detect_4d_array_format(numpy_arr)
-        if format_type == format_detection.Array4DFormat.HW3B:
+        if format_type == format_detection.Array4DFormat.HWCB:
             return numpy_arr.transpose(3, 0, 1, 2), True
-        if format_type == format_detection.Array4DFormat._3HWB:
+        if format_type == format_detection.Array4DFormat.CHWB:
             return numpy_arr.transpose(3, 1, 2, 0), True
-        if format_type == format_detection.Array4DFormat.BHW3:
+        if format_type == format_detection.Array4DFormat.BHWC:
             return numpy_arr, True
-        if format_type == format_detection.Array4DFormat.B3HW:
+        if format_type == format_detection.Array4DFormat.BCHW:
             return numpy_arr.transpose(0, 2, 3, 1), True
-        if format_type == format_detection.Array4DFormat._3BHW:
+        if format_type == format_detection.Array4DFormat.CBHW:
             return numpy_arr.transpose(1, 2, 3, 0), True
 
     raise ValueError(f"Cannot prepare array with shape {numpy_arr.shape}")
