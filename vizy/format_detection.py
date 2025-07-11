@@ -196,131 +196,173 @@ def _ambiguous_3d_format_detection(arr: np.ndarray) -> str:
         return "batch"
 
 
-def smart_4d_format_detection(arr: np.ndarray) -> str:
+def detect_4d_array_format(arr: np.ndarray) -> Array4DFormat:
+    """Determine the format of a 4-D numpy array.
+
+    Supported layouts (where B - batch, C - channel, H - height, W - width):
+
+    1. BHWC  - (B, H, W, C)
+    2. BCHW  - (B, C, H, W)
+    3. CBHW - (C, B, H, W)
+    4. CHWB - (C, H, W, B)
+    5. HWCB  - (H, W, C, B)
+
+    The function treats a dimension of size **3** (or **1** for grayscale) as a strong
+    indicator of the *channel* axis.  When both the first two axes have size 3 the
+    layout is ambiguous - we fall back to the heuristics implemented in
+    ``_ambiguous_4d_format_detection``.
+    """
+    if arr.ndim != 4:
+        raise ValueError(f"Expected 4D array, got {arr.ndim}D")
+
+    d0, d1, d2, d3 = arr.shape
+
+    # Helper to check if a dimension could reasonably be the channel axis
+    def _is_channel(dim_size: int) -> bool:
+        return dim_size in (1, 3)
+
+    # 1) Ambiguous case – both first two dimensions look like channels (3, 3, H, W)
+    if _is_channel(d0) and _is_channel(d1):
+        # Only treat as ambiguous when both are exactly 3 – otherwise size 1 is
+        # more likely to be a singleton batch or channel and easy to disambiguate.
+        if d0 == 3 and d1 == 3:
+            interpretation = _ambiguous_4d_format_detection(arr)
+            return Array4DFormat.BCHW if interpretation == "BCHW" else Array4DFormat.CBHW
+        # If one (or both) of them is 1 we can assume axis-0 is channel and axis-1
+        # is batch because height/width rarely equal 1.
+        return Array4DFormat.CBHW
+
+    # 2) Clear channel axis based on where the 3/1 is located
+    if _is_channel(d3):  # (B, H, W, C)
+        return Array4DFormat.BHWC
+    if _is_channel(d2):  # (H, W, C, B)
+        return Array4DFormat.HWCB
+    if _is_channel(d1):  # (B, C, H, W)
+        return Array4DFormat.BCHW
+    if _is_channel(d0):  # Either (C, B, H, W) or (C, H, W, B)
+        # Heuristic: whichever of dims 1 or 3 is smaller is probably the batch axis
+        # (batch size is usually smaller than spatial dimensions).
+        return Array4DFormat.CBHW if d1 <= d3 else Array4DFormat.CHWB
+
+    # 3) If no dimension looks like a channel we cannot determine the format
+    raise ValueError(f"Unable to determine 4D array format for shape {arr.shape}")
+
+
+def _ambiguous_4d_format_detection(arr: np.ndarray) -> str:
     """
     Smart detection for ambiguous 4D tensors where both arr.shape[0] and arr.shape[1] are 3.
     Returns 'BCHW' if likely (Batch, Channel, Height, Width) or 'CBHW' if likely (Channel, Batch, Height, Width).
 
     Uses heuristics based on the assumption that:
-    - In BCHW: each batch item should be a coherent image
+    - In BCHW: each batch item should be a coherent image with correlated RGB channels
     - In CBHW: each channel should represent the same color component across all batch items
+
+    Strong default preference for BCHW as it's the most common format in modern frameworks.
     """
     if arr.shape[0] != 3 or arr.shape[1] != 3:
         raise ValueError("This function is only for ambiguous (3, 3, H, W) arrays")
 
-    # Heuristic 1: Check correlation within putative channels vs within putative batch items
-
-    # Interpretation 1: Assume BCHW format
-    # Compare correlation within each batch item (across its 3 channels)
-    bchw_correlations = []
-    for b in range(3):  # For each batch item
-        for c1 in range(3):
-            for c2 in range(c1 + 1, 3):
-                corr = np.corrcoef(arr[b, c1].flatten(), arr[b, c2].flatten())[0, 1]
-                if not np.isnan(corr):
-                    bchw_correlations.append(abs(corr))
-
-    # Interpretation 2: Assume CBHW format
-    # Compare correlation within each channel (across all batch items)
-    cbhw_correlations = []
-    for c in range(3):  # For each channel
-        for b1 in range(3):
-            for b2 in range(b1 + 1, 3):
-                corr = np.corrcoef(arr[c, b1].flatten(), arr[c, b2].flatten())[0, 1]
-                if not np.isnan(corr):
-                    cbhw_correlations.append(abs(corr))
-
-    # RGB channels typically have moderate correlation, while batch items of the same channel
-    # (especially with noise variations) should have high correlation
-    bchw_avg_corr = np.mean(bchw_correlations) if bchw_correlations else 0
-    cbhw_avg_corr = np.mean(cbhw_correlations) if cbhw_correlations else 0
-
-    # Decision logic:
+    # Start with strong BCHW preference (most common in practice)
+    bchw_score = 3  # Strong default preference for BCHW
     cbhw_score = 0
-    bchw_score = 0
 
-    # Heuristic 1: Correlation difference
-    corr_diff = cbhw_avg_corr - bchw_avg_corr
-    if corr_diff > 0.05:  # CBHW significantly higher
-        cbhw_score += 2
-    elif corr_diff < -0.05:  # BCHW significantly higher
-        bchw_score += 2
-    else:
-        # Correlations are close - use other heuristics
+    try:
+        # Heuristic 1: Check correlation within putative channels vs within putative batch items
 
-        # Heuristic 2: Very high CBHW correlation suggests same channel across batch
-        if cbhw_avg_corr > 0.95:
+        # Interpretation 1: Assume BCHW format
+        # Compare correlation within each batch item (across its 3 channels)
+        bchw_correlations = []
+        for b in range(3):  # For each batch item
+            for c1 in range(3):
+                for c2 in range(c1 + 1, 3):
+                    corr = np.corrcoef(arr[b, c1].flatten(), arr[b, c2].flatten())[0, 1]
+                    if not np.isnan(corr):
+                        bchw_correlations.append(abs(corr))
+
+        # Interpretation 2: Assume CBHW format
+        # Compare correlation within each channel (across all batch items)
+        cbhw_correlations = []
+        for c in range(3):  # For each channel
+            for b1 in range(3):
+                for b2 in range(b1 + 1, 3):
+                    corr = np.corrcoef(arr[c, b1].flatten(), arr[c, b2].flatten())[0, 1]
+                    if not np.isnan(corr):
+                        cbhw_correlations.append(abs(corr))
+
+        bchw_avg_corr = np.mean(bchw_correlations) if bchw_correlations else 0
+        cbhw_avg_corr = np.mean(cbhw_correlations) if cbhw_correlations else 0
+
+        # Heuristic 2: Very high CBHW correlation with low BCHW correlation suggests CBHW
+        # This would happen if we have the same image repeated 3 times with small variations
+        if cbhw_avg_corr > 0.98 and bchw_avg_corr < 0.3:
+            cbhw_score += 4  # Strong evidence for CBHW
+
+        # Heuristic 3: Moderate BCHW correlation suggests natural RGB images
+        if 0.2 < bchw_avg_corr < 0.95:
+            bchw_score += 2  # Evidence for BCHW (natural RGB images)
+
+        # Heuristic 4: Check the reverse pattern - in CBHW, channels of same image should correlate
+        # For each "batch position" in CBHW interpretation, check RGB correlation
+        cbhw_rgb_corrs = []
+        for b in range(3):  # For each batch position in CBHW interpretation
+            for c1 in range(3):
+                for c2 in range(c1 + 1, 3):
+                    corr = np.corrcoef(arr[c1, b].flatten(), arr[c2, b].flatten())[0, 1]
+                    if not np.isnan(corr):
+                        cbhw_rgb_corrs.append(abs(corr))
+
+        cbhw_rgb_avg_corr = np.mean(cbhw_rgb_corrs) if cbhw_rgb_corrs else 0
+
+        # If CBHW RGB correlation is significantly higher than within-channel correlation,
+        # this suggests CBHW format (RGB components of same image correlate better than
+        # same channel across different images)
+        corr_diff = cbhw_rgb_avg_corr - cbhw_avg_corr
+        if corr_diff > 0.5:  # Very strong evidence
+            cbhw_score += 6  # Override default BCHW preference
+        elif corr_diff > 0.2:  # Strong evidence
+            cbhw_score += 4  # Strong evidence for CBHW
+        elif corr_diff > 0.05:  # Moderate evidence
+            cbhw_score += 2  # Moderate evidence for CBHW
+
+        # Heuristic 5: Check if each batch item looks like a coherent RGB image
+        rgb_like_count = 0
+        for b in range(3):
+            # Statistical diversity check: RGB channels should have different characteristics
+            means = [arr[b, c].mean() for c in range(3)]
+            stds = [arr[b, c].std() for c in range(3)]
+
+            # RGB channels often have different means and similar stds
+            if len(set(np.round(means, 1))) > 1:  # Different means
+                rgb_like_count += 1
+            if np.std(stds) / (np.mean(stds) + 1e-8) < 0.5:  # Similar standard deviations
+                rgb_like_count += 1
+
+        if rgb_like_count >= 4:  # Strong evidence of RGB-like structure
+            bchw_score += 2
+
+        # Heuristic 6: Check for CBHW-like patterns (same content, different channels)
+        # Compare structural similarity across "channels" in CBHW interpretation
+        cbhw_similarity_score = 0
+        for c in range(3):
+            for b1 in range(3):
+                for b2 in range(b1 + 1, 3):
+                    # Simple structural similarity: compare histograms
+                    hist1 = np.histogram(arr[c, b1], bins=10, range=(arr.min(), arr.max()))[0]
+                    hist2 = np.histogram(arr[c, b2], bins=10, range=(arr.min(), arr.max()))[0]
+                    hist1 = hist1 / (np.sum(hist1) + 1e-8)
+                    hist2 = hist2 / (np.sum(hist2) + 1e-8)
+
+                    # High histogram similarity suggests same content (CBHW pattern)
+                    similarity = 1 - np.sum(np.abs(hist1 - hist2)) / 2
+                    if similarity > 0.8:
+                        cbhw_similarity_score += 1
+
+        if cbhw_similarity_score >= 6:  # Very similar content across "channels"
             cbhw_score += 2
-        elif cbhw_avg_corr > 0.85:
-            cbhw_score += 1
 
-        # Heuristic 3: Moderate BCHW correlation suggests RGB channels
-        if 0.4 < bchw_avg_corr < 0.9:
-            bchw_score += 1
+    except (np.linalg.LinAlgError, ValueError, ZeroDivisionError):
+        # If analysis fails, stick with default BCHW preference
+        pass
 
-    # Heuristic 4: Statistical consistency check
-    # For CBHW: each channel should have similar statistics across batch items
-    cbhw_consistency = 0
-    for c in range(3):
-        channel_means = [arr[c, b].mean() for b in range(3)]
-        channel_stds = [arr[c, b].std() for b in range(3)]
-
-        # Check consistency of means and stds within this channel
-        if np.mean(channel_means) > 0:
-            mean_cv = np.std(channel_means) / np.mean(channel_means)
-            cbhw_consistency += max(0, 1 - mean_cv)  # Lower CV = higher consistency
-
-        if np.mean(channel_stds) > 0:
-            std_cv = np.std(channel_stds) / np.mean(channel_stds)
-            cbhw_consistency += max(0, 1 - std_cv)
-
-    # For BCHW: each batch should have similar RGB statistics
-    bchw_consistency = 0
-    for b in range(3):
-        batch_stds = [arr[b, c].std() for c in range(3)]
-
-        # RGB images often have different means across channels, so don't penalize that
-        # But stds should be somewhat similar
-        if np.mean(batch_stds) > 0:
-            std_cv = np.std(batch_stds) / np.mean(batch_stds)
-            bchw_consistency += max(0, 1 - std_cv)
-
-    # Apply consistency scores
-    if cbhw_consistency > bchw_consistency + 0.5:
-        cbhw_score += 1
-    elif bchw_consistency > cbhw_consistency + 0.5:
-        bchw_score += 1
-
-    # Heuristic 5: Check for RGB-like properties in BCHW interpretation
-    # RGB images often have correlated but distinct channels
-    rgb_like_score = 0
-    for b in range(3):
-        # Check if this batch item looks like a natural RGB image
-        r_channel = arr[b, 0]
-        g_channel = arr[b, 1]
-        b_channel = arr[b, 2]
-
-        # RGB channels should have some correlation but not be identical
-        rg_corr = abs(np.corrcoef(r_channel.flatten(), g_channel.flatten())[0, 1])
-        rb_corr = abs(np.corrcoef(r_channel.flatten(), b_channel.flatten())[0, 1])
-        gb_corr = abs(np.corrcoef(g_channel.flatten(), b_channel.flatten())[0, 1])
-
-        avg_rgb_corr = np.mean([rg_corr, rb_corr, gb_corr])
-
-        # Good RGB correlation range: moderate but not too high
-        if 0.3 < avg_rgb_corr < 0.95:
-            rgb_like_score += 1
-        elif avg_rgb_corr > 0.98:  # Too similar, might be same channel
-            rgb_like_score -= 0.5
-
-    if rgb_like_score >= 2:  # At least 2 out of 3 look RGB-like
-        bchw_score += 1
-
-    # Default preference: BCHW is more common in most frameworks
-    # But make this preference stronger when correlations are ambiguous
-    if abs(corr_diff) < 0.02:  # Very close correlations
-        bchw_score += 1  # Strong preference for BCHW
-    else:
-        bchw_score += 0.5  # Normal preference
-
+    # Return result based on scores
     return "CBHW" if cbhw_score > bchw_score else "BCHW"
