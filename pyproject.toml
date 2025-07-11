@@ -1,6 +1,6 @@
 [project]
 name = "vizy"
-version = "0.2.0"
+version = "1.0.0"
 description = "Tiny tensor visualiser: vz.plot(t) / vz.save(t)"
 authors = [{name = "Anıl Zeybek"}]
 readme = "README.md"
@@ -38,6 +38,16 @@ Issues = "https://github.com/anilzeybek/vizy/issues"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+exclude = [
+    "tests/data/",
+]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "tests/data/",
+]
 
 [dependency-groups]
 dev = [
