@@ -245,6 +245,63 @@ def test_3chw():
         os.unlink(saved_image_path)
 
 
+def test_3chw_alt1():
+    image1 = torch.from_numpy(get_test_image1().transpose(2, 0, 1)[None, ...])
+
+    image2 = torch.from_numpy(get_test_image2().transpose(2, 0, 1)[None, ...])
+    image2 = torch.nn.functional.interpolate(image2, size=(image1.shape[2], image1.shape[3]), mode="bilinear")
+
+    image3 = torch.from_numpy(get_test_image3().transpose(2, 0, 1)[None, ...])
+    image3 = torch.nn.functional.interpolate(image3, size=(image1.shape[2], image1.shape[3]), mode="bilinear")
+
+    image = np.concatenate([image1, image2, image3], axis=0)  # (B=3, C, H, W)
+    saved_image_path = vizy.save(image)
+    try:
+        assert images_look_same(saved_image_path, "tests/data/output/image1-image2-image3.png"), (
+            "The saved image does not match the target."
+        )
+    finally:
+        os.unlink(saved_image_path)
+
+
+def test_3chw_alt2():
+    image0 = torch.from_numpy(get_test_image0().transpose(2, 0, 1)[None, ...])
+
+    image2 = torch.from_numpy(get_test_image2().transpose(2, 0, 1)[None, ...])
+    image2 = torch.nn.functional.interpolate(image2, size=(image0.shape[2], image0.shape[3]), mode="bilinear")
+
+    image3 = torch.from_numpy(get_test_image3().transpose(2, 0, 1)[None, ...])
+    image3 = torch.nn.functional.interpolate(image3, size=(image0.shape[2], image0.shape[3]), mode="bilinear")
+
+    image = np.concatenate([image0, image2, image3], axis=0)  # (B=3, C, H, W)
+    saved_image_path = vizy.save(image)
+    try:
+        assert images_look_same(saved_image_path, "tests/data/output/image0-image2-image3.png"), (
+            "The saved image does not match the target."
+        )
+    finally:
+        os.unlink(saved_image_path)
+
+
+def test_3chw_alt3():
+    image3 = torch.from_numpy(get_test_image3().transpose(2, 0, 1)[None, ...])
+
+    image0 = torch.from_numpy(get_test_image0().transpose(2, 0, 1)[None, ...])
+    image0 = torch.nn.functional.interpolate(image0, size=(image3.shape[2], image3.shape[3]), mode="bilinear")
+
+    image1 = torch.from_numpy(get_test_image1().transpose(2, 0, 1)[None, ...])
+    image1 = torch.nn.functional.interpolate(image1, size=(image3.shape[2], image3.shape[3]), mode="bilinear")
+
+    image = np.concatenate([image3, image0, image1], axis=0)  # (B=3, C, H, W)
+    saved_image_path = vizy.save(image)
+    try:
+        assert images_look_same(saved_image_path, "tests/data/output/image3-image0-image1.png"), (
+            "The saved image does not match the target."
+        )
+    finally:
+        os.unlink(saved_image_path)
+
+
 def test_c3hw_torch():
     image0 = torch.from_numpy(get_test_image0()).permute(2, 0, 1)[None, ...]
 
