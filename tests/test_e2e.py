@@ -41,6 +41,21 @@ def image_path_to_array(image_path: str) -> np.ndarray:
     return np.array(image)
 
 
+def _resize_image_numpy(
+    image: np.ndarray, height_index: int, width_index: int, target_height: int, target_width: int
+) -> np.ndarray:
+    """Simple nearest neighbor resize using numpy indexing."""
+    h_ratio = image.shape[height_index] / target_height
+    w_ratio = image.shape[width_index] / target_width
+    h_indices = np.round(np.arange(target_height) * h_ratio).astype(int)
+    w_indices = np.round(np.arange(target_width) * w_ratio).astype(int)
+    h_indices = np.clip(h_indices, 0, image.shape[height_index] - 1)
+    w_indices = np.clip(w_indices, 0, image.shape[width_index] - 1)
+    resized_h = np.take(image, h_indices, axis=height_index)
+    resized = np.take(resized_h, w_indices, axis=width_index)
+    return resized
+
+
 def images_look_same(img_path1, img_path2, tolerance=2) -> bool:
     img1 = Image.open(img_path1).convert("RGB")
     img2 = Image.open(img_path2).convert("RGB")
@@ -209,14 +224,20 @@ def test_3chw():
 
 
 def test_c3hw_torch():
-    image = torch.from_numpy(get_test_image()).permute(2, 0, 1)[None, ...]
-    image = torch.cat([image, image - 40, image + 40], dim=0)
-    image = torch.clip(image, 0, 255)  # Ensure values stay in valid range
-    image = image.permute(1, 0, 2, 3)  # Convert to C3HW format
+    image0 = torch.from_numpy(get_test_image0()).permute(2, 0, 1)[None, ...]
+
+    image1 = torch.from_numpy(get_test_image1()).permute(2, 0, 1)[None, ...]
+    image1 = torch.nn.functional.interpolate(image1, size=(image0.shape[2], image0.shape[3]), mode="bilinear")
+
+    image2 = torch.from_numpy(get_test_image2()).permute(2, 0, 1)[None, ...]
+    image2 = torch.nn.functional.interpolate(image2, size=(image0.shape[2], image0.shape[3]), mode="bilinear")
+
+    image = torch.cat([image0, image1, image2], dim=0)
+    image = image.permute(1, 0, 2, 3)  # (C, B, H, W)
 
     saved_image_path = vizy.save(image)
     try:
-        assert images_look_same(saved_image_path, get_test_image_3_path()), (
+        assert images_look_same(saved_image_path, "tests/data/output/image0-image1-image2.png"), (
             "The saved image does not match the original."
         )
     finally:
@@ -224,7 +245,23 @@ def test_c3hw_torch():
 
 
 def test_3hwc_float():
-    pass
+    # Test 3 HWC images with float dtype - should match test_3chw output
+    image0 = get_test_image0()[None, ...].astype(np.float32)
+
+    image1 = get_test_image1()[None, ...].astype(np.float32)
+    image1 = _resize_image_numpy(image1, 1, 2, image0.shape[1], image0.shape[2])
+
+    image2 = get_test_image2()[None, ...].astype(np.float32)
+    image2 = _resize_image_numpy(image2, 1, 2, image0.shape[1], image0.shape[2])
+
+    image = np.concatenate([image0, image1, image2], axis=0)
+    saved_image_path = vizy.save(image)
+    try:
+        assert images_look_same(saved_image_path, "tests/data/output/image0-image1-image2.png"), (
+            "The saved image does not match the original."
+        )
+    finally:
+        os.unlink(saved_image_path)
 
 
 def test_2hw():
