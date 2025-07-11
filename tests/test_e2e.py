@@ -24,6 +24,10 @@ def get_test_image2_path() -> str:
     return "tests/data/input/test_image2.jpg"
 
 
+def get_test_image3_path() -> str:
+    return "tests/data/input/test_image3.jpg"
+
+
 def get_test_image0() -> np.ndarray:
     return image_path_to_array(get_test_image0_path())
 
@@ -34,6 +38,10 @@ def get_test_image1() -> np.ndarray:
 
 def get_test_image2() -> np.ndarray:
     return image_path_to_array(get_test_image2_path())
+
+
+def get_test_image3() -> np.ndarray:
+    return image_path_to_array(get_test_image3_path())
 
 
 def image_path_to_array(image_path: str) -> np.ndarray:
@@ -141,9 +149,7 @@ def test_1hwc():
     image = get_test_image0()[None, ...]  # (B=1, H, W, C)
     saved_image_path = vizy.save(image)
     try:
-        assert images_look_same(saved_image_path, get_test_image0_path()), (
-            "The saved image does not match the target."
-        )
+        assert images_look_same(saved_image_path, get_test_image0_path()), "The saved image does not match the target."
     finally:
         os.unlink(saved_image_path)
 
@@ -152,9 +158,7 @@ def test_hwc1():
     image = get_test_image0()[..., None]  # (H, W, C, B=1)
     saved_image_path = vizy.save(image)
     try:
-        assert images_look_same(saved_image_path, get_test_image0_path()), (
-            "The saved image does not match the target."
-        )
+        assert images_look_same(saved_image_path, get_test_image0_path()), "The saved image does not match the target."
     finally:
         os.unlink(saved_image_path)
 
@@ -163,9 +167,7 @@ def test_chw1():
     image = get_test_image0().transpose(2, 0, 1)[..., None]  # (C, H, W, B=1)
     saved_image_path = vizy.save(image)
     try:
-        assert images_look_same(saved_image_path, get_test_image0_path()), (
-            "The saved image does not match the target."
-        )
+        assert images_look_same(saved_image_path, get_test_image0_path()), "The saved image does not match the target."
     finally:
         os.unlink(saved_image_path)
 
@@ -185,9 +187,7 @@ def test_1chw_float():
     image = get_test_image0().transpose(2, 0, 1)[None, ...] / 255.0  # (C, H, W, B=1)
     saved_image_path = vizy.save(image)
     try:
-        assert images_look_same(saved_image_path, get_test_image0_path()), (
-            "The saved image does not match the target."
-        )
+        assert images_look_same(saved_image_path, get_test_image0_path()), "The saved image does not match the target."
     finally:
         os.unlink(saved_image_path)
 
@@ -196,9 +196,7 @@ def test_hwc1_full_float():
     image = get_test_image0().transpose(2, 0, 1)[None, ...].astype(np.float32)  # (C, H, W, B=1)
     saved_image_path = vizy.save(image)
     try:
-        assert images_look_same(saved_image_path, get_test_image0_path()), (
-            "The saved image does not match the target."
-        )
+        assert images_look_same(saved_image_path, get_test_image0_path()), "The saved image does not match the target."
     finally:
         os.unlink(saved_image_path)
 
@@ -207,9 +205,7 @@ def test_chw1_torch():
     image = torch.from_numpy(get_test_image0().transpose(2, 0, 1)[None, ...]).float() / 255.0  # (C, H, W, B=1)
     saved_image_path = vizy.save(image)
     try:
-        assert images_look_same(saved_image_path, get_test_image0_path()), (
-            "The saved image does not match the target."
-        )
+        assert images_look_same(saved_image_path, get_test_image0_path()), "The saved image does not match the target."
     finally:
         os.unlink(saved_image_path)
 
@@ -292,17 +288,22 @@ def test_3hwc_float():
 
 def test_4chw():
     # Test 4 CHW images in a 2x2 grid
-    image = get_test_image0().transpose(2, 0, 1)[None, ...]  # 1CHW
-    image = np.concatenate([image, image - 40, image + 40, image - 20], axis=0)
-    image = np.clip(image, 0, 255).astype(np.uint8)
+    image0 = get_test_image0().transpose(2, 0, 1)[None, ...]  # 1CHW
+
+    image1 = get_test_image1().transpose(2, 0, 1)[None, ...]
+    image1 = _resize_image_numpy(image1, 2, 3, image0.shape[2], image0.shape[3])
+
+    image2 = get_test_image2().transpose(2, 0, 1)[None, ...]
+    image2 = _resize_image_numpy(image2, 2, 3, image0.shape[2], image0.shape[3])
+
+    image3 = get_test_image3().transpose(2, 0, 1)[None, ...]
+    image3 = _resize_image_numpy(image3, 2, 3, image0.shape[2], image0.shape[3])
+
+    image = np.concatenate([image0, image1, image2, image3], axis=0)
     saved_image_path = vizy.save(image)
     try:
-        # Check that 4 images create a 2x2 grid - compare with itself for consistency
-        expected_path = "tests/data/input/test_image_4chw.jpg"
-        if not os.path.exists(expected_path):
-            vizy.save(expected_path, image)
-        assert images_look_same(saved_image_path, expected_path), (
-            "The saved image does not match the expected 4-image 2x2 grid."
+        assert images_look_same(saved_image_path, "tests/data/output/image0-image1-image2-image3.png"), (
+            "The saved image does not match the target."
         )
     finally:
         os.unlink(saved_image_path)
@@ -310,17 +311,22 @@ def test_4chw():
 
 def test_4hwc():
     # Test 4 HWC images in a 2x2 grid (should be same result as test_4chw)
-    image = get_test_image0()[None, ...]  # 1HWC
-    image = np.concatenate([image, image - 40, image + 40, image - 20], axis=0)
-    image = np.clip(image, 0, 255).astype(np.uint8)
+    image0 = get_test_image0()[None, ...]  # 1HWC
+
+    image1 = get_test_image1()[None, ...]
+    image1 = _resize_image_numpy(image1, 1, 2, image0.shape[1], image0.shape[2])
+
+    image2 = get_test_image2()[None, ...]
+    image2 = _resize_image_numpy(image2, 1, 2, image0.shape[1], image0.shape[2])
+
+    image3 = get_test_image3()[None, ...]
+    image3 = _resize_image_numpy(image3, 1, 2, image0.shape[1], image0.shape[2])
+
+    image = np.concatenate([image0, image1, image2, image3], axis=0)
     saved_image_path = vizy.save(image)
     try:
-        # Should produce same layout as test_4chw - 2x2 grid
-        expected_path = "tests/data/input/test_image_4hwc.jpg"
-        if not os.path.exists(expected_path):
-            vizy.save(expected_path, image)
-        assert images_look_same(saved_image_path, expected_path), (
-            "The saved image does not match the expected 4-image 2x2 grid."
+        assert images_look_same(saved_image_path, "tests/data/output/image0-image1-image2-image3.png"), (
+            "The saved image does not match the target."
         )
     finally:
         os.unlink(saved_image_path)
@@ -374,8 +380,8 @@ def test_list_hw():
     saved_image_path = vizy.save(image_list)
     try:
         expected_path = "tests/data/input/test_image_list_hw.jpg"
-        if not os.path.exists(expected_path):
-            vizy.save(expected_path, image_list)
+        # if not os.path.exists(expected_path):
+        #     vizy.save(expected_path, image_list)
         assert images_look_same(saved_image_path, expected_path), (
             "The saved image does not match the expected list output."
         )
