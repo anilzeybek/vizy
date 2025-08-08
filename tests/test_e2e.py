@@ -810,6 +810,19 @@ def test_large_batch_performance():
         os.unlink(saved_path)
 
 
+def test_bchw_two_fullhd_grayscale_side_by_side():
+    """BCHW tensor (2, 1, 1080, 1920) should render two 1080p grayscale images side-by-side."""
+    tensor = torch.randint(0, 256, (2, 1, 1080, 1920), dtype=torch.uint8)
+    saved_path = vizy.save(tensor)
+    try:
+        assert os.path.exists(saved_path)
+        img = Image.open(saved_path)
+        # Expect width 2*1920 and height 1080
+        assert img.size == (1920 * 2, 1080)
+    finally:
+        os.unlink(saved_path)
+
+
 def main():
     test_hwc()
 
