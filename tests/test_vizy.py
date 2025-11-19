@@ -380,7 +380,7 @@ class TestSummary:
     def test_summary_invalid_input(self):
         """Test summary with invalid input type."""
         with pytest.raises(TypeError, match="Expected torch.Tensor | np.ndarray"):
-            vizy.summary("invalid_string")
+            vizy.summary("invalid_string")  # type: ignore[arg-type]
 
 
 class TestPILSupport:
@@ -427,10 +427,12 @@ class TestPILSupport:
     def test_mixed_types_error(self):
         """Test that invalid types still raise appropriate errors."""
         with pytest.raises(TypeError, match="Expected torch.Tensor | np.ndarray | PIL.Image"):
-            vizy._to_numpy([1, 2, 3])  # List of numbers should still fail
+            # List of numbers should still fail
+            vizy._to_numpy([1, 2, 3])   # type: ignore[arg-type]
 
         with pytest.raises(TypeError, match="Expected torch.Tensor | np.ndarray | PIL.Image"):
-            vizy._to_numpy("string")  # String should still fail
+            # String should still fail
+            vizy._to_numpy("string")  # type: ignore[arg-type]
 
 
 class TestRandomArrays:
@@ -560,8 +562,8 @@ class TestListSupport:
         # Invalid sequences
         assert not vizy._is_sequence_of_tensors([])  # Empty
         assert not vizy._is_sequence_of_tensors(np.array([1, 2]))  # Single array
-        assert not vizy._is_sequence_of_tensors([1, 2, 3])  # List of numbers
-        assert not vizy._is_sequence_of_tensors([np.array([1]), "string"])  # Mixed invalid
+        assert not vizy._is_sequence_of_tensors([1, 2, 3])  # type: ignore[arg-type]
+        assert not vizy._is_sequence_of_tensors([np.array([1]), "string"])  # type: ignore[arg-type]
 
     def test_list_of_same_size_2d_arrays(self):
         """Test processing list of 2D arrays with same dimensions."""

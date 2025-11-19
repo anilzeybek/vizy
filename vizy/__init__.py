@@ -1,5 +1,5 @@
 """
-vizy - lightweight tensor visualisation helper.
+vizy: One-line tensor visualization for PyTorch and NumPy.
 
 Install
 -------
@@ -19,34 +19,37 @@ Supports torch.Tensor, numpy.ndarray, PIL.Image inputs, and lists/sequences of t
 import math
 import os
 import tempfile
-from typing import List, Sequence
+from typing import TYPE_CHECKING, Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.figure import Figure
 
 from vizy import format_detection
 
 try:
-    import torch  # type: ignore
-except ModuleNotFoundError:  # pragma: no cover
-    torch = None  # type: ignore
+    import torch
+except ModuleNotFoundError:
+    torch = None
 
 try:
-    from PIL import Image  # type: ignore
-except ModuleNotFoundError:  # pragma: no cover
-    Image = None  # type: ignore
+    from PIL import Image
+except ModuleNotFoundError:
+    Image = None
 
 __all__: Sequence[str] = ("plot", "save", "summary")
 __version__: str = "0.2.0"
 
-if torch is not None and Image is not None:
-    type TensorLike = torch.Tensor | np.ndarray | Image.Image
-elif torch is not None:
-    type TensorLike = torch.Tensor | np.ndarray
-elif Image is not None:
-    type TensorLike = np.ndarray | Image.Image
+if TYPE_CHECKING:
+    import torch as _torch_mod
+    from PIL import Image as _pil_image_mod
+
+    type _TorchTensor = _torch_mod.Tensor
+    type _PILImage = _pil_image_mod.Image
 else:
-    type TensorLike = np.ndarray
+    type _TorchTensor = np.ndarray
+    type _PILImage = np.ndarray
+type TensorLike = _TorchTensor | _PILImage | np.ndarray
 
 
 def _is_sequence_of_tensors(x: TensorLike | Sequence[TensorLike]) -> bool:
@@ -66,7 +69,7 @@ def _is_sequence_of_tensors(x: TensorLike | Sequence[TensorLike]) -> bool:
     return True
 
 
-def _pad_to_common_size(numpy_arrays: List[np.ndarray]) -> List[np.ndarray]:
+def _pad_to_common_size(numpy_arrays: list[np.ndarray]) -> list[np.ndarray]:
     """Pad numpy arrays to have the same height and width dimensions."""
     if len(numpy_arrays) == 0:
         return numpy_arrays
@@ -92,6 +95,7 @@ def _pad_to_common_size(numpy_arrays: List[np.ndarray]) -> List[np.ndarray]:
         pad_h = max_h - h
         pad_w = max_w - w
 
+        padded_arr: np.ndarray | None = None
         if arr.ndim == 2:
             padded_arr = np.pad(arr, ((0, pad_h), (0, pad_w)), mode="constant", constant_values=0)
         elif arr.ndim == 3:
@@ -100,13 +104,15 @@ def _pad_to_common_size(numpy_arrays: List[np.ndarray]) -> List[np.ndarray]:
             else:  # HWC format
                 padded_arr = np.pad(arr, ((0, pad_h), (0, pad_w), (0, 0)), mode="constant", constant_values=0)
 
+        assert padded_arr is not None
         padded_arrays.append(padded_arr)
     return padded_arrays
 
 
 def _to_numpy(x: TensorLike | Sequence[TensorLike]) -> np.ndarray:
     if _is_sequence_of_tensors(x):
-        numpy_arrays = []
+        assert isinstance(x, Sequence)
+        numpy_arrays: list[np.ndarray] = []
         for item in x:
             if torch is not None and isinstance(item, torch.Tensor):
                 arr = item.detach().cpu().numpy()
@@ -237,7 +243,7 @@ def _to_plottable_int_arr(numpy_arr: np.ndarray) -> np.ndarray:
     return numpy_arr
 
 
-def _create_figure(tensor: TensorLike | Sequence[TensorLike], **imshow_kwargs) -> plt.Figure:
+def _create_figure(tensor: TensorLike | Sequence[TensorLike], **imshow_kwargs) -> Figure:
     """Create a matplotlib figure from tensor."""
     numpy_arr = _to_numpy(tensor)
     numpy_arr = _to_plottable_int_arr(numpy_arr)
@@ -258,7 +264,7 @@ def _create_figure(tensor: TensorLike | Sequence[TensorLike], **imshow_kwargs) -
     return fig
 
 
-def plot(tensor: TensorLike | Sequence[TensorLike], **imshow_kwargs) -> plt.Figure:
+def plot(tensor: TensorLike | Sequence[TensorLike], **imshow_kwargs) -> None:
     """
     Display *tensor* using Matplotlib.
 
@@ -271,16 +277,15 @@ def plot(tensor: TensorLike | Sequence[TensorLike], **imshow_kwargs) -> plt.Figu
     **imshow_kwargs
         Extra arguments forwarded to plt.imshow.
 
-    Returns
-    -------
-    matplotlib.figure.Figure
     """
     _create_figure(tensor, **imshow_kwargs)
     plt.show()
 
 
 def save(
-    path_or_tensor: str | TensorLike | Sequence[TensorLike], tensor: TensorLike | None = None, **imshow_kwargs
+    path_or_tensor: str | TensorLike | Sequence[TensorLike],
+    tensor: TensorLike | Sequence[TensorLike] | None = None,
+    **imshow_kwargs,
 ) -> str:
     """
     Save *tensor* to *path*. Two call styles are supported::
@@ -302,9 +307,11 @@ def save(
         Resolved file path.
     """
     if tensor is None:
+        assert not isinstance(path_or_tensor, str)
         tensor, path = path_or_tensor, None
     else:
-        path = path_or_tensor  # type: ignore[assignment]
+        assert isinstance(path_or_tensor, str)
+        path = path_or_tensor
 
     fig = _create_figure(tensor, **imshow_kwargs)
 
@@ -328,6 +335,8 @@ def summary(tensor: TensorLike | Sequence[TensorLike]) -> None:
         Tensor, array, PIL Image, or list/tuple of these to summarize.
     """
     if _is_sequence_of_tensors(tensor):
+        assert isinstance(tensor, Sequence)
+
         print(f"Type: Sequence ({type(tensor).__name__}) of {len(tensor)} tensors")
         print("Individual tensor info:")
         for i, item in enumerate(tensor):
@@ -354,12 +363,13 @@ def summary(tensor: TensorLike | Sequence[TensorLike]) -> None:
 
             print(f"{item_type}{device_info}, Shape: {arr.shape}, Dtype: {dtype_str}")
 
-        # Also show the stacked/processed version
+        # Get the actual processed batch array (stacked and padded)
+        batch_arr = _to_numpy(tensor)
         print("\nProcessed as batch:")
-        print(f"Shape: {arr.shape}")
-        print(f"Dtype: {arr.dtype}")
-        if arr.size > 0:
-            arr_min, arr_max = arr.min(), arr.max()
+        print(f"Shape: {batch_arr.shape}")
+        print(f"Dtype: {batch_arr.dtype}")
+        if batch_arr.size > 0:
+            arr_min, arr_max = batch_arr.min(), batch_arr.max()
             print(f"Range: {arr_min} - {arr_max}")
         return
 
