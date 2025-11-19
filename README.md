@@ -1,8 +1,8 @@
-# vizy
+# vizy: One-line tensor visualization for PyTorch and NumPy
 
-**Lightweight tensor visualizer for PyTorch and NumPy**
+**Stop juggling tensor formats. Just visualize.**
 
-Display or save any NumPy array or PyTorch tensor with a single line with ease:
+Display or save any NumPy array or PyTorch tensor (supports 2D, 3D, 4D shapes) with a single line:
 
 ```python
 import vizy
@@ -35,6 +35,9 @@ vizy.save(tensor)
 
 It will automatically save the tensor to a temporary file and print the path, so you can scp it to your local machine and visualize it.
 
+## Technical Details
+
+**Note**: This library uses [matplotlib](https://github.com/matplotlib/matplotlib) for visualization under the hood. It handles tensor format detection, conversion, and grid layout automatically, but the actual plotting is done via matplotlib.
 
 ## Installation
 
