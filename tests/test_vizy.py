@@ -428,7 +428,7 @@ class TestPILSupport:
         """Test that invalid types still raise appropriate errors."""
         with pytest.raises(TypeError, match="Expected torch.Tensor | np.ndarray | PIL.Image"):
             # List of numbers should still fail
-            vizy._to_numpy([1, 2, 3])   # type: ignore[arg-type]
+            vizy._to_numpy([1, 2, 3])  # type: ignore[arg-type]
 
         with pytest.raises(TypeError, match="Expected torch.Tensor | np.ndarray | PIL.Image"):
             # String should still fail

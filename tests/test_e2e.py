@@ -472,27 +472,27 @@ def test_ambiguous_33hw_bchw():
     # Create 3 distinct RGB-like images with correlated channels
     np.random.seed(42)  # For reproducible test
     base_img = np.random.randint(0, 255, (32, 32), dtype=np.uint8)
-    
+
     # Create RGB versions with correlated channels
     img1_r = base_img
     img1_g = np.clip(base_img * 0.8 + 20, 0, 255).astype(np.uint8)
     img1_b = np.clip(base_img * 0.6 + 40, 0, 255).astype(np.uint8)
     img1 = np.stack([img1_r, img1_g, img1_b], axis=0)
-    
+
     img2_r = np.roll(base_img, 5, axis=0)
     img2_g = np.clip(img2_r * 0.9 + 10, 0, 255).astype(np.uint8)
     img2_b = np.clip(img2_r * 0.7 + 30, 0, 255).astype(np.uint8)
     img2 = np.stack([img2_r, img2_g, img2_b], axis=0)
-    
+
     img3_r = np.roll(base_img, -5, axis=1)
     img3_g = np.clip(img3_r * 0.85 + 15, 0, 255).astype(np.uint8)
     img3_b = np.clip(img3_r * 0.65 + 35, 0, 255).astype(np.uint8)
     img3 = np.stack([img3_r, img3_g, img3_b], axis=0)
-    
+
     # Stack as (3, 3, H, W) - should be interpreted as BCHW (3 batch, 3 channels)
     ambiguous_tensor = np.stack([img1, img2, img3], axis=0)
     assert ambiguous_tensor.shape == (3, 3, 32, 32)
-    
+
     saved_image_path = vizy.save(ambiguous_tensor)
     try:
         # Should create a grid of 3 RGB images
@@ -509,21 +509,21 @@ def test_ambiguous_33hw_cbhw():
     # Create 3 very similar images (same content, different channels)
     np.random.seed(123)
     base_pattern = np.random.randint(50, 200, (32, 32), dtype=np.uint8)
-    
+
     # Create 3 similar images (like same scene with small variations)
     img1 = base_pattern
     img2 = np.clip(base_pattern + np.random.randint(-10, 11, base_pattern.shape), 0, 255).astype(np.uint8)
     img3 = np.clip(base_pattern + np.random.randint(-10, 11, base_pattern.shape), 0, 255).astype(np.uint8)
-    
+
     # Arrange as CBHW: each "channel" contains all batch items
     r_channel = np.stack([img1, img2, img3], axis=0)  # (3, H, W)
     g_channel = np.stack([img1, img2, img3], axis=0)  # Same pattern
     b_channel = np.stack([img1, img2, img3], axis=0)  # Same pattern
-    
+
     # Stack as (3, 3, H, W) but in CBHW format
     cbhw_tensor = np.stack([r_channel, g_channel, b_channel], axis=0)
     assert cbhw_tensor.shape == (3, 3, 32, 32)
-    
+
     saved_image_path = vizy.save(cbhw_tensor)
     try:
         assert os.path.exists(saved_image_path)
@@ -537,7 +537,7 @@ def test_ambiguous_33hw_cbhw():
 def test_edge_case_dtypes():
     """Test various edge case data types."""
     base_image = get_test_image0()[:64, :64]  # Smaller for faster testing
-    
+
     # Test int16
     image_int16 = base_image.astype(np.int16)
     saved_path = vizy.save(image_int16)
@@ -545,7 +545,7 @@ def test_edge_case_dtypes():
         assert os.path.exists(saved_path)
     finally:
         os.unlink(saved_path)
-    
+
     # Test int32
     image_int32 = base_image.astype(np.int32)
     saved_path = vizy.save(image_int32)
@@ -553,7 +553,7 @@ def test_edge_case_dtypes():
         assert os.path.exists(saved_path)
     finally:
         os.unlink(saved_path)
-    
+
     # Test float64
     image_float64 = (base_image / 255.0).astype(np.float64)
     saved_path = vizy.save(image_float64)
@@ -561,7 +561,7 @@ def test_edge_case_dtypes():
         assert os.path.exists(saved_path)
     finally:
         os.unlink(saved_path)
-    
+
     # Test boolean array (convert to uint8 since matplotlib has limitations with bool)
     image_bool = (base_image > 127).astype(np.uint8) * 255  # Convert bool to 0/255
     saved_path = vizy.save(image_bool)
@@ -574,7 +574,7 @@ def test_edge_case_dtypes():
 def test_float_range_edge_cases():
     """Test float arrays in different value ranges."""
     h, w = 32, 32
-    
+
     # Test 0-1 range (normalized)
     image_01 = np.random.rand(h, w, 3).astype(np.float32)
     saved_path = vizy.save(image_01)
@@ -582,7 +582,7 @@ def test_float_range_edge_cases():
         assert os.path.exists(saved_path)
     finally:
         os.unlink(saved_path)
-    
+
     # Test -1 to 1 range
     image_neg1_1 = (np.random.rand(h, w, 3) * 2 - 1).astype(np.float32)
     saved_path = vizy.save(image_neg1_1)
@@ -590,7 +590,7 @@ def test_float_range_edge_cases():
         assert os.path.exists(saved_path)
     finally:
         os.unlink(saved_path)
-    
+
     # Test very large values
     image_large = (np.random.rand(h, w, 3) * 1000 + 500).astype(np.float32)
     saved_path = vizy.save(image_large)
@@ -598,7 +598,7 @@ def test_float_range_edge_cases():
         assert os.path.exists(saved_path)
     finally:
         os.unlink(saved_path)
-    
+
     # Test array with some NaN values (should not crash)
     image_with_nan = np.random.rand(h, w, 3).astype(np.float32)
     image_with_nan[0, 0, 0] = np.nan
@@ -621,7 +621,7 @@ def test_single_pixel_edge_cases():
     except ValueError:
         # Expected: 1x1 images may cause dimension issues after squeezing
         pass
-    
+
     # 1xN image (very wide, thin strip)
     strip_h = np.random.randint(0, 255, (1, 50, 3), dtype=np.uint8)
     saved_path = vizy.save(strip_h)
@@ -629,7 +629,7 @@ def test_single_pixel_edge_cases():
         assert os.path.exists(saved_path)
     finally:
         os.unlink(saved_path)
-    
+
     # Nx1 image (very tall, thin strip)
     strip_v = np.random.randint(0, 255, (50, 1, 3), dtype=np.uint8)
     saved_path = vizy.save(strip_v)
@@ -637,8 +637,8 @@ def test_single_pixel_edge_cases():
         assert os.path.exists(saved_path)
     finally:
         os.unlink(saved_path)
-    
-    # 1x1 grayscale 
+
+    # 1x1 grayscale
     tiny_gray = np.array([[128]], dtype=np.uint8)  # (1, 1)
     try:
         saved_path = vizy.save(tiny_gray)
@@ -658,7 +658,7 @@ def test_mixed_pil_modes():
         assert os.path.exists(saved_path)
     finally:
         os.unlink(saved_path)
-    
+
     # Grayscale PIL image
     gray_img = Image.new("L", (32, 32), color=128)
     saved_path = vizy.save(gray_img)
@@ -666,10 +666,10 @@ def test_mixed_pil_modes():
         assert os.path.exists(saved_path)
     finally:
         os.unlink(saved_path)
-    
+
     # Palette mode image
     palette_img = Image.new("P", (32, 32))
-    palette_img.putpalette([i % 256 for i in range(256*3)])  # Simple palette (mod 256)
+    palette_img.putpalette([i % 256 for i in range(256 * 3)])  # Simple palette (mod 256)
     saved_path = vizy.save(palette_img)
     try:
         assert os.path.exists(saved_path)
@@ -687,7 +687,7 @@ def test_format_detection_edge_cases():
         # Should create a 2x2 grid for 4 images
     finally:
         os.unlink(saved_path)
-    
+
     # Test (2, H, W) - 2 channels, should be batch
     image_2hw = np.random.randint(0, 255, (2, 32, 32), dtype=np.uint8)
     saved_path = vizy.save(image_2hw)
@@ -696,7 +696,7 @@ def test_format_detection_edge_cases():
         # Should create side-by-side layout
     finally:
         os.unlink(saved_path)
-    
+
     # Test very small spatial dimensions with channels
     tiny_spatial = np.random.randint(0, 255, (3, 3, 3), dtype=np.uint8)  # Highly ambiguous
     saved_path = vizy.save(tiny_spatial)
@@ -709,9 +709,9 @@ def test_format_detection_edge_cases():
 def test_grid_layout_unusual_batches():
     """Test grid layouts for unusual batch sizes."""
     base_img = get_test_image0()[:32, :32, 0]  # Small grayscale for speed
-    
+
     # Test 5 images (should create appropriate grid)
-    images_5 = np.stack([base_img + i*10 for i in range(5)], axis=0)
+    images_5 = np.stack([base_img + i * 10 for i in range(5)], axis=0)
     saved_path = vizy.save(images_5)
     try:
         assert os.path.exists(saved_path)
@@ -720,17 +720,17 @@ def test_grid_layout_unusual_batches():
         assert result_img.size[0] >= 32 * 3  # At least 3 columns
     finally:
         os.unlink(saved_path)
-    
+
     # Test 7 images
-    images_7 = np.stack([base_img + i*10 for i in range(7)], axis=0)
+    images_7 = np.stack([base_img + i * 10 for i in range(7)], axis=0)
     saved_path = vizy.save(images_7)
     try:
         assert os.path.exists(saved_path)
     finally:
         os.unlink(saved_path)
-    
+
     # Test 10 images
-    images_10 = np.stack([base_img + i*10 for i in range(10)], axis=0)
+    images_10 = np.stack([base_img + i * 10 for i in range(10)], axis=0)
     saved_path = vizy.save(images_10)
     try:
         assert os.path.exists(saved_path)
@@ -747,7 +747,7 @@ def test_all_zeros_black_images():
         assert os.path.exists(saved_path)
     finally:
         os.unlink(saved_path)
-    
+
     # All black grayscale
     black_gray = np.zeros((64, 64), dtype=np.uint8)
     saved_path = vizy.save(black_gray)
@@ -755,7 +755,7 @@ def test_all_zeros_black_images():
         assert os.path.exists(saved_path)
     finally:
         os.unlink(saved_path)
-    
+
     # Batch of black images
     black_batch = np.zeros((3, 32, 32, 3), dtype=np.uint8)
     saved_path = vizy.save(black_batch)
@@ -769,12 +769,12 @@ def test_torch_device_mixed_types():
     """Test tensors on different devices and mixed types in lists."""
     if torch is None:
         return  # Skip if torch not available
-    
+
     base_img = get_test_image0()[:32, :32]
-    
+
     # CPU tensor
     cpu_tensor = torch.from_numpy(base_img.transpose(2, 0, 1)).float()
-    
+
     # Mixed list: numpy + torch
     mixed_list = [base_img, cpu_tensor.permute(1, 2, 0).numpy()]
     saved_path = vizy.save(mixed_list)
@@ -782,7 +782,7 @@ def test_torch_device_mixed_types():
         assert os.path.exists(saved_path)
     finally:
         os.unlink(saved_path)
-    
+
     # Test CUDA if available
     if torch.cuda.is_available():
         cuda_tensor = cpu_tensor.cuda()
@@ -798,7 +798,7 @@ def test_large_batch_performance():
     # Create a batch of 20 small images to test grid layout and performance
     small_img = np.random.randint(0, 255, (16, 16, 3), dtype=np.uint8)
     large_batch = np.stack([small_img + i for i in range(20)], axis=0)
-    
+
     saved_path = vizy.save(large_batch)
     try:
         assert os.path.exists(saved_path)
