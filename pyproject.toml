@@ -1,12 +1,12 @@
 [project]
 name = "vizy"
-version = "1.0.0"
+version = "1.1.0"
 description = "Tiny tensor visualiser: vz.plot(t) / vz.save(t)"
 authors = [{name = "Anıl Zeybek"}]
 readme = "README.md"
 requires-python = ">=3.8"
 license = "MIT"
-keywords = ["tensor", "visualization", "pytorch", "numpy", "matplotlib"]
+keywords = ["tensor", "visualization", "pytorch", "numpy"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
