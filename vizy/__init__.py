@@ -8,22 +8,22 @@ import vizy
 
 API
 ---
-vizy.plot(tensor, **imshow_kwargs)  # show tensor as image or grid
-vizy.save(path_or_tensor, tensor=None, **imshow_kwargs)  # save to file
+vizy.plot(tensor)  # show tensor as image or grid
+vizy.save(path_or_tensor, tensor=None)  # save to file
 
 If *tensor* is 4-D we assume shape is either (B, C, H, W) or (C, B, H, W) with C in {1,3}.
-For ndarray/tensors of 2-D or 3-D we transpose to (H, W, C) as expected by Matplotlib.
+For ndarray/tensors of 2-D or 3-D we transpose to (H, W, C) format.
 Supports torch.Tensor, numpy.ndarray, PIL.Image inputs, and lists/sequences of these types.
 """
 
 import math
 import os
 import tempfile
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING, Any, Sequence
 
-import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.figure import Figure
+from numpy.typing import NDArray
+from PIL import Image
 
 from vizy import format_detection
 
@@ -32,24 +32,17 @@ try:
 except ModuleNotFoundError:
     torch = None
 
-try:
-    from PIL import Image
-except ModuleNotFoundError:
-    Image = None
 
 __all__: Sequence[str] = ("plot", "save", "summary")
 __version__: str = "0.2.0"
 
 if TYPE_CHECKING:
     import torch as _torch_mod
-    from PIL import Image as _pil_image_mod
 
     type _TorchTensor = _torch_mod.Tensor
-    type _PILImage = _pil_image_mod.Image
 else:
     type _TorchTensor = np.ndarray
-    type _PILImage = np.ndarray
-type TensorLike = _TorchTensor | _PILImage | np.ndarray
+type TensorLike = _TorchTensor | Image.Image | NDArray[Any]
 
 
 def _is_sequence_of_tensors(x: TensorLike | Sequence[TensorLike]) -> bool:
@@ -63,13 +56,13 @@ def _is_sequence_of_tensors(x: TensorLike | Sequence[TensorLike]) -> bool:
     for item in x:
         is_tensor = torch is not None and isinstance(item, torch.Tensor)
         is_array = isinstance(item, np.ndarray)
-        is_pil = Image is not None and isinstance(item, Image.Image)
+        is_pil = isinstance(item, Image.Image)
         if not (is_tensor or is_array or is_pil):
             return False
     return True
 
 
-def _pad_to_common_size(numpy_arrays: list[np.ndarray]) -> list[np.ndarray]:
+def _pad_to_common_size(numpy_arrays: list[NDArray[Any]]) -> list[NDArray[Any]]:
     """Pad numpy arrays to have the same height and width dimensions."""
     if len(numpy_arrays) == 0:
         return numpy_arrays
@@ -95,7 +88,7 @@ def _pad_to_common_size(numpy_arrays: list[np.ndarray]) -> list[np.ndarray]:
         pad_h = max_h - h
         pad_w = max_w - w
 
-        padded_arr: np.ndarray | None = None
+        padded_arr: NDArray[Any] | None = None
         if arr.ndim == 2:
             padded_arr = np.pad(arr, ((0, pad_h), (0, pad_w)), mode="constant", constant_values=0)
         elif arr.ndim == 3:
@@ -109,14 +102,14 @@ def _pad_to_common_size(numpy_arrays: list[np.ndarray]) -> list[np.ndarray]:
     return padded_arrays
 
 
-def _to_numpy(x: TensorLike | Sequence[TensorLike]) -> np.ndarray:
+def _to_numpy(x: TensorLike | Sequence[TensorLike]) -> NDArray[Any]:
     if _is_sequence_of_tensors(x):
         assert isinstance(x, Sequence)
-        numpy_arrays: list[np.ndarray] = []
+        numpy_arrays: list[NDArray[Any]] = []
         for item in x:
             if torch is not None and isinstance(item, torch.Tensor):
                 arr = item.detach().cpu().numpy()
-            elif Image is not None and isinstance(item, Image.Image):
+            elif isinstance(item, Image.Image):
                 arr = np.array(item)
             elif isinstance(item, np.ndarray):
                 arr = item
@@ -139,7 +132,7 @@ def _to_numpy(x: TensorLike | Sequence[TensorLike]) -> np.ndarray:
     # Handle single tensor/array/image
     if torch is not None and isinstance(x, torch.Tensor):
         x = x.detach().cpu().numpy()
-    elif Image is not None and isinstance(x, Image.Image):
+    elif isinstance(x, Image.Image):
         x = np.array(x)
 
     if not isinstance(x, np.ndarray):
@@ -147,7 +140,7 @@ def _to_numpy(x: TensorLike | Sequence[TensorLike]) -> np.ndarray:
     return x
 
 
-def _normalize_array_format(numpy_arr: np.ndarray) -> tuple[np.ndarray, bool]:
+def _normalize_array_format(numpy_arr: NDArray[Any]) -> tuple[NDArray[Any], bool]:
     """Convert any given numpy array to HW/BHW/HWC/BHWC format and return whether it requires grid layout."""
     numpy_arr = numpy_arr.squeeze()
 
@@ -181,7 +174,7 @@ def _normalize_array_format(numpy_arr: np.ndarray) -> tuple[np.ndarray, bool]:
     raise ValueError(f"Cannot prepare array with shape {numpy_arr.shape}")
 
 
-def _make_grid(numpy_arr: np.ndarray) -> np.ndarray:
+def _make_grid(numpy_arr: NDArray[Any]) -> NDArray[Any]:
     """Make grid image from BHWC/BHW array.
 
     Arranges multiple images in a grid layout with the following properties:
@@ -224,49 +217,81 @@ def _make_grid(numpy_arr: np.ndarray) -> np.ndarray:
     return canvas
 
 
-def _convert_float_arr_to_int_arr(numpy_arr: np.ndarray) -> np.ndarray:
-    """Convert float arrays with values in 0-255 range to uint8."""
-    if numpy_arr.dtype.kind == "f":  # float type
+def _force_np_arr_to_int_arr(numpy_arr: NDArray[Any]) -> NDArray[np.uint8]:
+    """Force numpy array to uint8."""
+    if numpy_arr.dtype == np.uint8:
+        return numpy_arr
+    elif numpy_arr.dtype.kind == "f":  # float type
         arr_min, arr_max = numpy_arr.min(), numpy_arr.max()
-        # Only convert if values are clearly in 0-255 range, not 0-1 range
+        # Check if values are in 0-255 range (not normalized 0-1)
         # We check if max > 1.5 to distinguish from normalized 0-1 arrays
-        if arr_min >= -0.5 and arr_max > 1.5 and arr_max <= 255.5:
+        # Require arr_min >= 0 to ensure no negative values (which would indicate
+        # the array is not in 0-255 pixel range and should be normalized instead)
+        if arr_min >= 0 and arr_max > 1.5 and arr_max <= 255.5:
+            # Already in 0-255 range, convert directly
             return np.clip(np.round(numpy_arr), 0, 255).astype(np.uint8)
-    return numpy_arr
+        else:
+            # Likely normalized 0-1 range or other range, normalize to 0-255
+            # if all values between 0 and 1 (inclusive):
+            if np.all(numpy_arr >= 0) and np.all(numpy_arr <= 1):
+                return np.clip(np.round(numpy_arr * 255), 0, 255).astype(np.uint8)
+            elif arr_max > arr_min:  # Avoid division by zero
+                normalized = (numpy_arr - arr_min) / (arr_max - arr_min)
+                return np.clip(np.round(normalized * 255), 0, 255).astype(np.uint8)
+            else:
+                # All values are the same
+                # If value is exactly 1.0, treat as normalized (scale to 255)
+                # Otherwise, clip to 0-255 range
+                if arr_min == 1.0:
+                    return np.clip(np.round(numpy_arr * 255), 0, 255).astype(np.uint8)
+                else:
+                    return np.clip(np.round(numpy_arr), 0, 255).astype(np.uint8)
+    elif numpy_arr.dtype.kind in ("i", "u"):  # signed or unsigned integer
+        # Convert other integer types to uint8 with clipping
+        return np.clip(numpy_arr, 0, 255).astype(np.uint8)
+    else:
+        raise ValueError(f"Unsupported dtype for conversion to uint8: {numpy_arr.dtype}")
 
 
-def _to_plottable_int_arr(numpy_arr: np.ndarray) -> np.ndarray:
+def _to_plottable_int_arr(numpy_arr: NDArray[Any]) -> NDArray[np.uint8]:
     numpy_arr, requires_grid = _normalize_array_format(numpy_arr)
     if requires_grid:
         numpy_arr = _make_grid(numpy_arr)
-    numpy_arr = _convert_float_arr_to_int_arr(numpy_arr)
+    numpy_arr = _force_np_arr_to_int_arr(numpy_arr)
     return numpy_arr
 
 
-def _create_figure(tensor: TensorLike | Sequence[TensorLike], **imshow_kwargs) -> Figure:
-    """Create a matplotlib figure from tensor."""
-    numpy_arr = _to_numpy(tensor)
-    numpy_arr = _to_plottable_int_arr(numpy_arr)
-
-    # Set figure size to match exact pixel dimensions
-    h, w = numpy_arr.shape[:2]
-    dpi = 100
-    fig, ax = plt.subplots(figsize=(w / dpi, h / dpi), dpi=dpi)
-
-    if numpy_arr.ndim == 2 or numpy_arr.shape[2] == 1:
-        ax.imshow(numpy_arr.squeeze(), cmap="gray", **imshow_kwargs)
+def _numpy_to_pil_image(numpy_arr: NDArray[np.uint8]) -> Image.Image:
+    """Convert numpy array to PIL Image."""
+    if numpy_arr.ndim == 2:
+        # Grayscale image
+        return Image.fromarray(numpy_arr, mode="L")
+    elif numpy_arr.ndim == 3:
+        if numpy_arr.shape[2] == 1:
+            # Single channel, convert to 2D
+            return Image.fromarray(numpy_arr.squeeze(), mode="L")
+        elif numpy_arr.shape[2] == 3:
+            # RGB image
+            return Image.fromarray(numpy_arr, mode="RGB")
+        elif numpy_arr.shape[2] == 4:
+            # RGBA image
+            return Image.fromarray(numpy_arr, mode="RGBA")
+        else:
+            raise ValueError(f"Unsupported number of channels: {numpy_arr.shape[2]}")
     else:
-        ax.imshow(numpy_arr, **imshow_kwargs)
-    ax.axis("off")
-
-    # Remove all padding to ensure exact pixel dimensions
-    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
-    return fig
+        raise ValueError(f"Unsupported array dimensions: {numpy_arr.ndim}")
 
 
-def plot(tensor: TensorLike | Sequence[TensorLike], **imshow_kwargs) -> None:
+def _tensor_to_pil_image(tensor: TensorLike | Sequence[TensorLike]) -> Image.Image:
+    numpy_arr = _to_numpy(tensor)
+    plottable_numpy_arr = _to_plottable_int_arr(numpy_arr)
+    pil_image = _numpy_to_pil_image(plottable_numpy_arr)
+    return pil_image
+
+
+def plot(tensor: TensorLike | Sequence[TensorLike]) -> None:
     """
-    Display *tensor* using Matplotlib.
+    Display *tensor* using PIL/Pillow (opens system image viewer).
 
     Parameters
     ----------
@@ -274,18 +299,15 @@ def plot(tensor: TensorLike | Sequence[TensorLike], **imshow_kwargs) -> None:
         Image tensor of shape (*, H, W) or (*, C, H, W), PIL Image, or a
         list/tuple of 2D/3D tensors. For lists with mismatched dimensions,
         images will be padded to the largest size.
-    **imshow_kwargs
-        Extra arguments forwarded to plt.imshow.
 
     """
-    _create_figure(tensor, **imshow_kwargs)
-    plt.show()
+    pil_image = _tensor_to_pil_image(tensor)
+    pil_image.show()
 
 
 def save(
     path_or_tensor: str | TensorLike | Sequence[TensorLike],
     tensor: TensorLike | Sequence[TensorLike] | None = None,
-    **imshow_kwargs,
 ) -> str:
     """
     Save *tensor* to *path*. Two call styles are supported::
@@ -313,13 +335,12 @@ def save(
         assert isinstance(path_or_tensor, str)
         path = path_or_tensor
 
-    fig = _create_figure(tensor, **imshow_kwargs)
-
     if path is None:
         fd, path = tempfile.mkstemp(suffix=".png", prefix="vizy-")
         os.close(fd)
-    fig.savefig(path, bbox_inches=None, pad_inches=0)
-    plt.close(fig)
+
+    pil_image = _tensor_to_pil_image(tensor)
+    pil_image.save(path)
 
     print(path)
     return path
@@ -347,7 +368,7 @@ def summary(tensor: TensorLike | Sequence[TensorLike]) -> None:
                 device_info = f" (device: {item.device})" if hasattr(item, "device") else ""
                 arr = item.detach().cpu().numpy()
                 dtype_str = str(item.dtype)
-            elif Image is not None and isinstance(item, Image.Image):
+            elif isinstance(item, Image.Image):
                 item_type = "PIL.Image"
                 device_info = f" (mode: {item.mode})"
                 arr = np.array(item)
@@ -380,7 +401,7 @@ def summary(tensor: TensorLike | Sequence[TensorLike]) -> None:
         # Convert to numpy for analysis but keep original for type info
         arr = tensor.detach().cpu().numpy()
         dtype_str = str(tensor.dtype)
-    elif Image is not None and isinstance(tensor, Image.Image):
+    elif isinstance(tensor, Image.Image):
         array_type = "PIL.Image"
         device_info = f" (mode: {tensor.mode})"
         # Convert to numpy for analysis

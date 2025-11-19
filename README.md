@@ -37,7 +37,7 @@ It will automatically save the tensor to a temporary file and print the path, so
 
 ## Technical Details
 
-**Note**: This library uses [matplotlib](https://github.com/matplotlib/matplotlib) for visualization under the hood. It handles tensor format detection, conversion, and grid layout automatically, but the actual plotting is done via matplotlib.
+**Note**: This library uses [PIL/Pillow](https://github.com/python-pillow/Pillow) for image visualization and saving. This library handles tensor format detection, conversion, and grid layout, but the actual plotting is done via PIL.
 
 ## Installation
 

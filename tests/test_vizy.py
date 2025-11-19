@@ -2,7 +2,6 @@ import os
 import tempfile
 from unittest.mock import patch
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 import torch
@@ -178,45 +177,125 @@ class TestMakeGrid:
         assert result.shape == (40, 60, 3)  # 2 rows, 2 cols
 
 
-class TestConvertFloatToInt:
-    """Test the _convert_float_to_int function."""
+class TestPadToCommonSize:
+    """Test the _pad_to_common_size function."""
+
+    def test_empty_list(self):
+        """Test that empty list returns empty list."""
+        result = vizy._pad_to_common_size([])
+        assert result == []
+
+    def test_same_size_2d_arrays(self):
+        """Test that same-size 2D arrays remain unchanged."""
+        arr1 = np.random.rand(32, 32)
+        arr2 = np.random.rand(32, 32)
+        result = vizy._pad_to_common_size([arr1, arr2])
+        assert len(result) == 2
+        assert np.array_equal(result[0], arr1)
+        assert np.array_equal(result[1], arr2)
+
+    def test_different_size_2d_arrays(self):
+        """Test padding of different-size 2D arrays."""
+        arr1 = np.random.rand(20, 30)
+        arr2 = np.random.rand(40, 50)
+        result = vizy._pad_to_common_size([arr1, arr2])
+        assert len(result) == 2
+        assert result[0].shape == (40, 50)
+        assert result[1].shape == (40, 50)
+        # Check that original content is preserved
+        assert np.array_equal(result[0][:20, :30], arr1)
+        assert np.array_equal(result[1], arr2)
+        # Check padding is zeros
+        assert np.all(result[0][20:, :] == 0)
+        assert np.all(result[0][:, 30:] == 0)
+
+    def test_different_size_3d_hwc_arrays(self):
+        """Test padding of different-size 3D HWC arrays."""
+        arr1 = np.random.rand(20, 30, 3)
+        arr2 = np.random.rand(40, 50, 3)
+        result = vizy._pad_to_common_size([arr1, arr2])
+        assert len(result) == 2
+        assert result[0].shape == (40, 50, 3)
+        assert result[1].shape == (40, 50, 3)
+
+    def test_different_size_3d_chw_arrays(self):
+        """Test padding of different-size 3D CHW arrays."""
+        arr1 = np.random.rand(3, 20, 30)
+        arr2 = np.random.rand(3, 40, 50)
+        result = vizy._pad_to_common_size([arr1, arr2])
+        assert len(result) == 2
+        assert result[0].shape == (3, 40, 50)
+        assert result[1].shape == (3, 40, 50)
+
+
+class TestForceNpArrToIntArr:
+    """Test the _force_np_arr_to_int_arr function."""
+
+    def test_uint8_unchanged(self):
+        """Test that uint8 arrays remain unchanged."""
+        arr = np.array([0, 127, 255], dtype=np.uint8)
+        result = vizy._force_np_arr_to_int_arr(arr)
+        assert np.array_equal(result, arr)
+        assert result.dtype == np.uint8
 
     def test_float_in_0_255_range(self):
         """Test conversion of float arrays in 0-255 range to uint8."""
         arr = np.array([0.0, 127.5, 255.0], dtype=np.float32)
-        result = vizy._convert_float_arr_to_int_arr(arr)
+        result = vizy._force_np_arr_to_int_arr(arr)
         expected = np.array([0, 128, 255], dtype=np.uint8)
         assert np.array_equal(result, expected)
         assert result.dtype == np.uint8
 
-    def test_float_in_0_1_range_unchanged(self):
-        """Test that float arrays in 0-1 range are unchanged."""
+    def test_float_in_0_1_range(self):
+        """Test that float arrays in 0-1 range are scaled to 0-255."""
         arr = np.array([0.0, 0.5, 1.0], dtype=np.float32)
-        result = vizy._convert_float_arr_to_int_arr(arr)
-        assert np.array_equal(result, arr)
-        assert result.dtype == np.float32
-
-    def test_integer_array_unchanged(self):
-        """Test that integer arrays are unchanged."""
-        arr = np.array([0, 127, 255], dtype=np.uint8)
-        result = vizy._convert_float_arr_to_int_arr(arr)
-        assert np.array_equal(result, arr)
+        result = vizy._force_np_arr_to_int_arr(arr)
+        expected = np.array([0, 128, 255], dtype=np.uint8)
+        assert np.array_equal(result, expected)
         assert result.dtype == np.uint8
 
-    def test_float_outside_0_255_range(self):
-        """Test that float arrays outside 0-255 range are unchanged."""
-        arr = np.array([-10.0, 300.0, 500.0], dtype=np.float32)
-        result = vizy._convert_float_arr_to_int_arr(arr)
-        assert np.array_equal(result, arr)
-        assert result.dtype == np.float32
+    def test_float_normalized_range(self):
+        """Test that float arrays in arbitrary range are normalized to 0-255."""
+        arr = np.array([10.0, 50.0, 100.0], dtype=np.float32)
+        result = vizy._force_np_arr_to_int_arr(arr)
+        assert result.dtype == np.uint8
+        assert result.min() >= 0
+        assert result.max() <= 255
 
-    def test_clipping_behavior(self):
-        """Test that values are properly clipped to 0-255 range."""
-        # This test was wrong - the function doesn't convert values outside 0-255 range
-        arr = np.array([100.0, 200.0, 255.0], dtype=np.float32)
-        result = vizy._convert_float_arr_to_int_arr(arr)
-        expected = np.array([100, 200, 255], dtype=np.uint8)
-        assert np.array_equal(result, expected)
+    def test_integer_array_conversion(self):
+        """Test conversion of other integer types."""
+        arr = np.array([0, 127, 255], dtype=np.int32)
+        result = vizy._force_np_arr_to_int_arr(arr)
+        assert result.dtype == np.uint8
+        assert np.array_equal(result, np.array([0, 127, 255], dtype=np.uint8))
+
+    def test_integer_array_clipping(self):
+        """Test that integer arrays outside 0-255 are clipped."""
+        arr = np.array([-10, 300, 500], dtype=np.int32)
+        result = vizy._force_np_arr_to_int_arr(arr)
+        assert result.dtype == np.uint8
+        assert result.min() >= 0
+        assert result.max() <= 255
+
+    def test_constant_array(self):
+        """Test array with all same values."""
+        arr = np.array([50.0, 50.0, 50.0], dtype=np.float32)
+        result = vizy._force_np_arr_to_int_arr(arr)
+        assert result.dtype == np.uint8
+        assert np.all(result == 50)
+
+    def test_array_with_negative_values(self):
+        """Test that arrays with negative values normalize instead of clipping."""
+        arr = np.array([-0.3, 50.0, 200.0], dtype=np.float32)
+        result = vizy._force_np_arr_to_int_arr(arr)
+        assert result.dtype == np.uint8
+        # Should normalize (not clip), so min should be 0 and max should be 255
+        assert result.min() == 0
+        assert result.max() == 255
+        # The middle value should be normalized proportionally
+        # Original range: -0.3 to 200.0 (range = 200.3)
+        # Normalized 50.0: (50.0 - (-0.3)) / 200.3 * 255 ≈ 64
+        assert result[1] == 64  # Approximately 64 after normalization and rounding
 
 
 class TestPrepareForDisplay:
@@ -305,7 +384,7 @@ class TestSave:
         arr = np.random.rand(50, 60, 3)  # Use RGB to avoid cmap conflict
 
         with patch("builtins.print") as mock_print:
-            result_path = vizy.save(arr, vmin=0.2)
+            result_path = vizy.save(arr)
 
         try:
             assert os.path.exists(result_path)
@@ -383,18 +462,128 @@ class TestSummary:
             vizy.summary("invalid_string")  # type: ignore[arg-type]
 
 
-class TestPILSupport:
-    """Test PIL Image support functionality."""
+class TestNumpyToPilImage:
+    """Test the _numpy_to_pil_image function."""
+
+    def test_2d_grayscale(self):
+        """Test conversion of 2D array to grayscale PIL image."""
+        arr = np.random.randint(0, 255, (32, 32), dtype=np.uint8)
+        pil_img = vizy._numpy_to_pil_image(arr)
+        assert isinstance(pil_img, Image.Image)
+        assert pil_img.mode == "L"
+        assert pil_img.size == (32, 32)
+
+    def test_3d_single_channel(self):
+        """Test conversion of 3D array with single channel."""
+        arr = np.random.randint(0, 255, (32, 32, 1), dtype=np.uint8)
+        pil_img = vizy._numpy_to_pil_image(arr)
+        assert isinstance(pil_img, Image.Image)
+        assert pil_img.mode == "L"
+        assert pil_img.size == (32, 32)
+
+    def test_3d_rgb(self):
+        """Test conversion of 3D array with RGB channels."""
+        arr = np.random.randint(0, 255, (32, 32, 3), dtype=np.uint8)
+        pil_img = vizy._numpy_to_pil_image(arr)
+        assert isinstance(pil_img, Image.Image)
+        assert pil_img.mode == "RGB"
+        assert pil_img.size == (32, 32)
+
+    def test_3d_rgba(self):
+        """Test conversion of 3D array with RGBA channels."""
+        arr = np.random.randint(0, 255, (32, 32, 4), dtype=np.uint8)
+        pil_img = vizy._numpy_to_pil_image(arr)
+        assert isinstance(pil_img, Image.Image)
+        assert pil_img.mode == "RGBA"
+        assert pil_img.size == (32, 32)
+
+    def test_invalid_channels(self):
+        """Test that invalid number of channels raises ValueError."""
+        arr = np.random.randint(0, 255, (32, 32, 5), dtype=np.uint8)
+        with pytest.raises(ValueError, match="Unsupported number of channels"):
+            vizy._numpy_to_pil_image(arr)
+
+    def test_invalid_dimensions(self):
+        """Test that invalid dimensions raise ValueError."""
+        arr = np.random.randint(0, 255, (32,), dtype=np.uint8)
+        with pytest.raises(ValueError, match="Unsupported array dimensions"):
+            vizy._numpy_to_pil_image(arr)
+
+
+class TestTensorToPilImage:
+    """Test the _tensor_to_pil_image function."""
+
+    def test_numpy_array_2d(self):
+        """Test conversion of 2D numpy array."""
+        arr = np.random.rand(32, 32)
+        pil_img = vizy._tensor_to_pil_image(arr)
+        assert isinstance(pil_img, Image.Image)
+
+    def test_numpy_array_3d(self):
+        """Test conversion of 3D numpy array."""
+        arr = np.random.rand(32, 32, 3)
+        pil_img = vizy._tensor_to_pil_image(arr)
+        assert isinstance(pil_img, Image.Image)
+        assert pil_img.mode in ["RGB", "L"]
+
+    def test_torch_tensor(self):
+        """Test conversion of torch tensor."""
+        tensor = torch.rand(3, 32, 32)
+        pil_img = vizy._tensor_to_pil_image(tensor)
+        assert isinstance(pil_img, Image.Image)
+        assert pil_img.mode in ["RGB", "L"]
+
+    def test_pil_image(self):
+        """Test that PIL image is converted correctly."""
+        pil_img_input = Image.new("RGB", (32, 32), color=(255, 0, 0))
+        pil_img_output = vizy._tensor_to_pil_image(pil_img_input)
+        assert isinstance(pil_img_output, Image.Image)
+
+    def test_list_of_arrays(self):
+        """Test conversion of list of arrays."""
+        arr1 = np.random.rand(32, 32)
+        arr2 = np.random.rand(32, 32)
+        pil_img = vizy._tensor_to_pil_image([arr1, arr2])
+        assert isinstance(pil_img, Image.Image)
+        # Should create a grid, so width should be doubled
+        assert pil_img.size[0] == 64  # 2 images side by side
+
+
+class TestPlot:
+    """Test the plot function."""
+
+    def test_plot_numpy_array(self):
+        """Test plotting numpy array."""
+        arr = np.random.rand(32, 32, 3)
+        with patch("PIL.Image.Image.show") as mock_show:
+            vizy.plot(arr)
+        mock_show.assert_called_once()
+
+    def test_plot_torch_tensor(self):
+        """Test plotting torch tensor."""
+        tensor = torch.rand(3, 32, 32)
+        with patch("PIL.Image.Image.show") as mock_show:
+            vizy.plot(tensor)
+        mock_show.assert_called_once()
 
     def test_plot_pil_image(self):
         """Test plotting PIL image."""
         pil_img = Image.new("RGB", (32, 32), color=(0, 255, 0))  # Green image
+        with patch("PIL.Image.Image.show") as mock_show:
+            vizy.plot(pil_img)
+        mock_show.assert_called_once()
 
-        with patch("matplotlib.pyplot.show"):
-            _ = vizy.plot(pil_img)
+    def test_plot_list_of_arrays(self):
+        """Test plotting list of arrays."""
+        arr1 = np.random.rand(32, 32)
+        arr2 = np.random.rand(32, 32)
+        with patch("PIL.Image.Image.show") as mock_show:
+            vizy.plot([arr1, arr2])
+        mock_show.assert_called_once()
 
-        # The function should complete without error
-        plt.close("all")
+
+class TestPILSupport:
+    """Test PIL Image support functionality."""
 
     def test_save_pil_image(self):
         """Test saving PIL image to file."""
@@ -448,8 +637,10 @@ class TestRandomArrays:
             result = vizy._to_plottable_int_arr(arr)
             assert result.shape == (h, w)
 
-            fig = vizy._create_figure(arr)
-            plt.close(fig)
+            # Test conversion to PIL image
+            pil_img = vizy._tensor_to_pil_image(arr)
+            assert isinstance(pil_img, Image.Image)
+            assert pil_img.size == (w, h)
 
     def test_random_3d_arrays(self):
         """Test with random 3D arrays."""
@@ -466,8 +657,9 @@ class TestRandomArrays:
             result = vizy._to_plottable_int_arr(arr)
             assert result.ndim in [2, 3]
 
-            fig = vizy._create_figure(arr)
-            plt.close(fig)
+            # Test conversion to PIL image
+            pil_img = vizy._tensor_to_pil_image(arr)
+            assert isinstance(pil_img, Image.Image)
 
     def test_random_4d_arrays(self):
         """Test with random 4D arrays."""
@@ -487,10 +679,11 @@ class TestRandomArrays:
                 # Result can be 2D (single channel squeezed) or 3D (multi-channel)
                 assert result.ndim in [2, 3]
 
-                fig = vizy._create_figure(arr)
-                plt.close(fig)
+                # Test conversion to PIL image
+                pil_img = vizy._tensor_to_pil_image(arr)
+                assert isinstance(pil_img, Image.Image)
             except (ValueError, TypeError):
-                # Some random shapes might not be valid for matplotlib, which is expected
+                # Some random shapes might not be valid, which is expected
                 pass
 
     def test_random_torch_tensors(self):
@@ -519,11 +712,9 @@ class TestRandomArrays:
             tensor = torch.rand(*shape)
 
             try:
-                # Convert to numpy first since _prepare_for_display expects numpy arrays
-                arr = vizy._to_numpy(tensor)
-                _ = vizy._to_plottable_int_arr(arr)
-                fig = vizy._create_figure(tensor)
-                plt.close(fig)
+                # Test conversion to PIL image
+                pil_img = vizy._tensor_to_pil_image(tensor)
+                assert isinstance(pil_img, Image.Image)
             except (ValueError, TypeError):
                 # Some random shapes might not be valid, which is expected
                 pass
@@ -533,20 +724,20 @@ class TestRandomArrays:
         # Minimal shapes
         arr = np.random.rand(2, 2)  # Use 2x2 instead of 1x1 to avoid edge cases
         _ = vizy._to_plottable_int_arr(arr)
-        fig = vizy._create_figure(arr)
-        plt.close(fig)
+        pil_img = vizy._tensor_to_pil_image(arr)
+        assert isinstance(pil_img, Image.Image)
 
         # Single pixel RGB
         arr = np.random.rand(2, 2, 3)  # Use 2x2 instead of 1x1
         _ = vizy._to_plottable_int_arr(arr)
-        fig = vizy._create_figure(arr)
-        plt.close(fig)
+        pil_img = vizy._tensor_to_pil_image(arr)
+        assert isinstance(pil_img, Image.Image)
 
         # Large batch size
         arr = np.random.rand(16, 3, 32, 32)
         _ = vizy._to_plottable_int_arr(arr)
-        fig = vizy._create_figure(arr)
-        plt.close(fig)
+        pil_img = vizy._tensor_to_pil_image(arr)
+        assert isinstance(pil_img, Image.Image)
 
 
 class TestListSupport:
@@ -655,11 +846,9 @@ class TestListSupport:
         array1_list = [arr1_1, arr1_2]
 
         # Should work without errors
-        with patch("matplotlib.pyplot.show"):
+        with patch("PIL.Image.Image.show"):
             # _ = vizy.plot(array0_list)
-            _ = vizy.plot(array1_list)
-
-        plt.close("all")
+            vizy.plot(array1_list)
 
     def test_list_save_integration(self):
         """Test that list saving works end-to-end."""
