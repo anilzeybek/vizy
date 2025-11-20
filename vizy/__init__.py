@@ -19,7 +19,8 @@ Supports torch.Tensor, numpy.ndarray, PIL.Image inputs, and lists/sequences of t
 import math
 import os
 import tempfile
-from typing import TYPE_CHECKING, Any, Sequence
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -42,7 +43,7 @@ if TYPE_CHECKING:
     type _TorchTensor = _torch_mod.Tensor
 else:
     type _TorchTensor = np.ndarray
-type TensorLike = _TorchTensor | Image.Image | NDArray[Any]
+type TensorLike = _TorchTensor | Image.Image | NDArray[np.number]
 
 
 def _is_sequence_of_tensors(x: TensorLike | Sequence[TensorLike]) -> bool:
@@ -62,12 +63,12 @@ def _is_sequence_of_tensors(x: TensorLike | Sequence[TensorLike]) -> bool:
     return True
 
 
-def _pad_to_common_size(numpy_arrays: list[NDArray[Any]]) -> list[NDArray[Any]]:
+def _pad_to_common_size(numpy_arrays: list[NDArray[np.number]]) -> list[NDArray[np.number]]:
     """Pad numpy arrays to have the same height and width dimensions."""
     if len(numpy_arrays) == 0:
         return numpy_arrays
 
-    hw_pairs = []
+    hw_pairs: list[tuple[int, int]] = []
     for arr in numpy_arrays:
         if arr.ndim == 2:
             h, w = arr.shape
@@ -83,12 +84,12 @@ def _pad_to_common_size(numpy_arrays: list[NDArray[Any]]) -> list[NDArray[Any]]:
     max_h = max(h for h, _ in hw_pairs)
     max_w = max(w for _, w in hw_pairs)
 
-    padded_arrays = []
+    padded_arrays: list[NDArray[np.number]] = []
     for arr, (h, w) in zip(numpy_arrays, hw_pairs):
         pad_h = max_h - h
         pad_w = max_w - w
 
-        padded_arr: NDArray[Any] | None = None
+        padded_arr: NDArray[np.number] | None = None
         if arr.ndim == 2:
             padded_arr = np.pad(arr, ((0, pad_h), (0, pad_w)), mode="constant", constant_values=0)
         elif arr.ndim == 3:
@@ -102,13 +103,13 @@ def _pad_to_common_size(numpy_arrays: list[NDArray[Any]]) -> list[NDArray[Any]]:
     return padded_arrays
 
 
-def _to_numpy(x: TensorLike | Sequence[TensorLike]) -> NDArray[Any]:
+def _to_numpy(x: TensorLike | Sequence[TensorLike]) -> NDArray[np.number]:
     if _is_sequence_of_tensors(x):
         assert isinstance(x, Sequence)
-        numpy_arrays: list[NDArray[Any]] = []
+        numpy_arrays: list[NDArray[np.number]] = []
         for item in x:
             if torch is not None and isinstance(item, torch.Tensor):
-                arr = item.detach().cpu().numpy()
+                arr: NDArray[np.number] = item.detach().cpu().numpy()
             elif isinstance(item, Image.Image):
                 arr = np.array(item)
             elif isinstance(item, np.ndarray):
@@ -131,16 +132,20 @@ def _to_numpy(x: TensorLike | Sequence[TensorLike]) -> NDArray[Any]:
 
     # Handle single tensor/array/image
     if torch is not None and isinstance(x, torch.Tensor):
-        x = x.detach().cpu().numpy()
+        np_arr: NDArray[np.number] = x.detach().cpu().numpy()
     elif isinstance(x, Image.Image):
-        x = np.array(x)
+        np_arr = np.array(x)
+    elif isinstance(x, np.ndarray):
+        np_arr = x
+    else:
+        raise TypeError(
+            f"Unsupported type: {type(x)}, expected torch.Tensor | np.ndarray | PIL.Image | sequence of these types"
+        )
 
-    if not isinstance(x, np.ndarray):
-        raise TypeError("Expected torch.Tensor | np.ndarray | PIL.Image | sequence of these types")
-    return x
+    return np_arr
 
 
-def _normalize_array_format(numpy_arr: NDArray[Any]) -> tuple[NDArray[Any], bool]:
+def _normalize_array_format(numpy_arr: NDArray[np.number]) -> tuple[NDArray[np.number], bool]:
     """Convert any given numpy array to HW/BHW/HWC/BHWC format and return whether it requires grid layout."""
     numpy_arr = numpy_arr.squeeze()
 
@@ -174,7 +179,7 @@ def _normalize_array_format(numpy_arr: NDArray[Any]) -> tuple[NDArray[Any], bool
     raise ValueError(f"Cannot prepare array with shape {numpy_arr.shape}")
 
 
-def _make_grid(numpy_arr: NDArray[Any]) -> NDArray[Any]:
+def _make_grid(numpy_arr: NDArray[np.number]) -> NDArray[np.number]:
     """Make grid image from BHWC/BHW array.
 
     Arranges multiple images in a grid layout with the following properties:
@@ -210,19 +215,20 @@ def _make_grid(numpy_arr: NDArray[Any]) -> NDArray[Any]:
     canvas = np.zeros((h * grid_rows, w * grid_cols, c), dtype=numpy_arr.dtype)
     for idx in range(b):
         row, col = divmod(idx, grid_cols)
-        img = numpy_arr[idx]
+        img = cast(NDArray[np.number], numpy_arr[idx])
         if img.ndim == 2:
             img = img[..., np.newaxis]
         canvas[row * h : (row + 1) * h, col * w : (col + 1) * w, :] = img
     return canvas
 
 
-def _force_np_arr_to_int_arr(numpy_arr: NDArray[Any]) -> NDArray[np.uint8]:
+def _force_np_arr_to_int_arr(numpy_arr: NDArray[np.number]) -> NDArray[np.uint8]:
     """Force numpy array to uint8."""
     if numpy_arr.dtype == np.uint8:
-        return numpy_arr
+        return cast(NDArray[np.uint8], numpy_arr)
     elif numpy_arr.dtype.kind == "f":  # float type
-        arr_min, arr_max = numpy_arr.min(), numpy_arr.max()
+        arr_min = cast(float, numpy_arr.min())
+        arr_max = cast(float, numpy_arr.max())
         # Check if values are in 0-255 range (not normalized 0-1)
         # We check if max > 1.5 to distinguish from normalized 0-1 arrays
         # Require arr_min >= 0 to ensure no negative values (which would indicate
@@ -236,7 +242,7 @@ def _force_np_arr_to_int_arr(numpy_arr: NDArray[Any]) -> NDArray[np.uint8]:
             if np.all(numpy_arr >= 0) and np.all(numpy_arr <= 1):
                 return np.clip(np.round(numpy_arr * 255), 0, 255).astype(np.uint8)
             elif arr_max > arr_min:  # Avoid division by zero
-                normalized = (numpy_arr - arr_min) / (arr_max - arr_min)
+                normalized: NDArray[np.number] = (numpy_arr - arr_min) / (arr_max - arr_min)
                 return np.clip(np.round(normalized * 255), 0, 255).astype(np.uint8)
             else:
                 # All values are the same
@@ -253,7 +259,7 @@ def _force_np_arr_to_int_arr(numpy_arr: NDArray[Any]) -> NDArray[np.uint8]:
         raise ValueError(f"Unsupported dtype for conversion to uint8: {numpy_arr.dtype}")
 
 
-def _to_plottable_int_arr(numpy_arr: NDArray[Any]) -> NDArray[np.uint8]:
+def _to_plottable_int_arr(numpy_arr: NDArray[np.number]) -> NDArray[np.uint8]:
     numpy_arr, requires_grid = _normalize_array_format(numpy_arr)
     if requires_grid:
         numpy_arr = _make_grid(numpy_arr)
@@ -390,7 +396,8 @@ def summary(tensor: TensorLike | Sequence[TensorLike]) -> None:
         print(f"Shape: {batch_arr.shape}")
         print(f"Dtype: {batch_arr.dtype}")
         if batch_arr.size > 0:
-            arr_min, arr_max = batch_arr.min(), batch_arr.max()
+            arr_min = cast(float, batch_arr.min())
+            arr_max = cast(float, batch_arr.max())
             print(f"Range: {arr_min} - {arr_max}")
         return
 
@@ -422,12 +429,13 @@ def summary(tensor: TensorLike | Sequence[TensorLike]) -> None:
 
     # Range (min - max)
     if arr.size > 0:  # Only if array is not empty
-        arr_min, arr_max = arr.min(), arr.max()
+        arr_min = cast(float, arr.min())
+        arr_max = cast(float, arr.max())
         print(f"Range: {arr_min} - {arr_max}")
 
         # Number of unique values for integer dtypes
         if arr.dtype.kind in ("i", "u"):  # signed or unsigned integer
-            unique_count = len(np.unique(arr))
+            unique_count = len(np.unique(cast(NDArray[np.number], arr)))
             print(f"Number of unique values: {unique_count}")
     else:
         print("Range: N/A (empty array)")
