@@ -143,51 +143,47 @@ def _to_numpy(x: TensorLike | Sequence[TensorLike]) -> NDArray[np.number]:
     return np_arr
 
 
+def _normalize_3d_array(numpy_arr: NDArray[np.number]) -> tuple[NDArray[np.number], bool]:
+    """Normalize a 3D array to HWC or BHW format and return whether it requires grid layout."""
+    format_type = format_detection.detect_3d_array_format(numpy_arr)
+    match format_type:
+        case format_detection.Array3DFormat.HWC:
+            return numpy_arr, False
+        case format_detection.Array3DFormat.CHW:
+            return numpy_arr.transpose(1, 2, 0), False
+        case format_detection.Array3DFormat.BHW:
+            return numpy_arr, True
+        case format_detection.Array3DFormat.HWB:
+            return numpy_arr.transpose(2, 0, 1), True
+
+
+def _normalize_4d_array(numpy_arr: NDArray[np.number]) -> tuple[NDArray[np.number], bool]:
+    """Normalize a 4D array to BHWC format and return whether it requires grid layout."""
+    format_type = format_detection.detect_4d_array_format(numpy_arr)
+    match format_type:
+        case format_detection.Array4DFormat.HWCB:
+            return numpy_arr.transpose(3, 0, 1, 2), True
+        case format_detection.Array4DFormat.CHWB:
+            return numpy_arr.transpose(3, 1, 2, 0), True
+        case format_detection.Array4DFormat.BHWC:
+            return numpy_arr, True
+        case format_detection.Array4DFormat.BCHW:
+            return numpy_arr.transpose(0, 2, 3, 1), True
+        case format_detection.Array4DFormat.CBHW:
+            return numpy_arr.transpose(1, 2, 3, 0), True
+
+
 def _normalize_array_format(numpy_arr: NDArray[np.number]) -> tuple[NDArray[np.number], bool]:
     """Convert any given numpy array to HW/BHW/HWC/BHWC format and return whether it requires grid layout."""
     numpy_arr = numpy_arr.squeeze()
 
     if numpy_arr.ndim == 2:
         return numpy_arr, False
-
-    return_arr = numpy_arr
-    requires_grid = False
-
     if numpy_arr.ndim == 3:
-        format_type = format_detection.detect_3d_array_format(numpy_arr)
-        match format_type:
-            case format_detection.Array3DFormat.HWC:
-                return_arr = numpy_arr
-                requires_grid = False
-            case format_detection.Array3DFormat.CHW:
-                return_arr = numpy_arr.transpose(1, 2, 0)
-                requires_grid = False
-            case format_detection.Array3DFormat.BHW:
-                return_arr = numpy_arr
-                requires_grid = True
-            case format_detection.Array3DFormat.HWB:
-                return_arr = numpy_arr.transpose(2, 0, 1)
-                requires_grid = True
-
+        return _normalize_3d_array(numpy_arr)
     if numpy_arr.ndim == 4:
-        format_type = format_detection.detect_4d_array_format(numpy_arr)
-        match format_type:
-            case format_detection.Array4DFormat.HWCB:
-                return_arr = numpy_arr.transpose(3, 0, 1, 2)
-                requires_grid = True
-            case format_detection.Array4DFormat.CHWB:
-                return_arr = numpy_arr.transpose(3, 1, 2, 0)
-                requires_grid = True
-            case format_detection.Array4DFormat.BHWC:
-                return_arr = numpy_arr
-                requires_grid = True
-            case format_detection.Array4DFormat.BCHW:
-                return_arr = numpy_arr.transpose(0, 2, 3, 1)
-                requires_grid = True
-            case format_detection.Array4DFormat.CBHW:
-                return_arr = numpy_arr.transpose(1, 2, 3, 0)
-                requires_grid = True
-    return return_arr, requires_grid
+        return _normalize_4d_array(numpy_arr)
+    raise ValueError(f"Cannot prepare array with {numpy_arr.ndim} dimensions")
 
 
 def _make_grid(numpy_arr: NDArray[np.number]) -> NDArray[np.number]:
@@ -233,35 +229,39 @@ def _make_grid(numpy_arr: NDArray[np.number]) -> NDArray[np.number]:
     return canvas
 
 
+def _convert_float_to_uint8(numpy_arr: NDArray[np.number]) -> NDArray[np.uint8]:
+    """Convert float array to uint8, handling various ranges."""
+    arr_min = numpy_arr.min()
+    arr_max = numpy_arr.max()
+    # Check if values are in 0-255 range (not normalized 0-1)
+    # We check if max > 1.5 to distinguish from normalized 0-1 arrays
+    # Require arr_min >= 0 to ensure no negative values (which would indicate
+    # the array is not in 0-255 pixel range and should be normalized instead)
+    if arr_min >= 0 and arr_max > 1.5 and arr_max <= 255.5:
+        # Already in 0-255 range, convert directly
+        return np.clip(np.round(numpy_arr), 0, 255).astype(np.uint8)
+
+    # Likely normalized 0-1 range or other range, normalize to 0-255
+    # if all values between 0 and 1 (inclusive):
+    if np.all(numpy_arr >= 0) and np.all(numpy_arr <= 1):
+        return np.clip(np.round(numpy_arr * 255), 0, 255).astype(np.uint8)
+    if arr_max > arr_min:  # Avoid division by zero
+        normalized = (numpy_arr - arr_min) / (arr_max - arr_min)
+        return np.clip(np.round(normalized * 255), 0, 255).astype(np.uint8)
+    # All values are the same
+    # If value is exactly 1.0, treat as normalized (scale to 255)
+    # Otherwise, clip to 0-255 range
+    if arr_min == 1.0:
+        return np.clip(np.round(numpy_arr * 255), 0, 255).astype(np.uint8)
+    return np.clip(np.round(numpy_arr), 0, 255).astype(np.uint8)
+
+
 def _force_np_arr_to_int_arr(numpy_arr: NDArray[np.number]) -> NDArray[np.uint8]:
     """Force numpy array to uint8."""
     if numpy_arr.dtype == np.uint8:
         return cast(NDArray[np.uint8], numpy_arr)
-
     if numpy_arr.dtype.kind == "f":  # float type
-        arr_min = numpy_arr.min()
-        arr_max = numpy_arr.max()
-        # Check if values are in 0-255 range (not normalized 0-1)
-        # We check if max > 1.5 to distinguish from normalized 0-1 arrays
-        # Require arr_min >= 0 to ensure no negative values (which would indicate
-        # the array is not in 0-255 pixel range and should be normalized instead)
-        if arr_min >= 0 and arr_max > 1.5 and arr_max <= 255.5:
-            # Already in 0-255 range, convert directly
-            return np.clip(np.round(numpy_arr), 0, 255).astype(np.uint8)
-
-        # Likely normalized 0-1 range or other range, normalize to 0-255
-        # if all values between 0 and 1 (inclusive):
-        if np.all(numpy_arr >= 0) and np.all(numpy_arr <= 1):
-            return np.clip(np.round(numpy_arr * 255), 0, 255).astype(np.uint8)
-        if arr_max > arr_min:  # Avoid division by zero
-            normalized = (numpy_arr - arr_min) / (arr_max - arr_min)
-            return np.clip(np.round(normalized * 255), 0, 255).astype(np.uint8)
-        # All values are the same
-        # If value is exactly 1.0, treat as normalized (scale to 255)
-        # Otherwise, clip to 0-255 range
-        if arr_min == 1.0:
-            return np.clip(np.round(numpy_arr * 255), 0, 255).astype(np.uint8)
-        return np.clip(np.round(numpy_arr), 0, 255).astype(np.uint8)
+        return _convert_float_to_uint8(numpy_arr)
     if numpy_arr.dtype.kind in ("i", "u"):  # signed or unsigned integer
         # Convert other integer types to uint8 with clipping
         return np.clip(numpy_arr, 0, 255).astype(np.uint8)
@@ -361,6 +361,83 @@ def save(
     return path
 
 
+def _get_tensor_info(item: TensorLike) -> tuple[str, str, NDArray[np.number], str] | None:
+    """Extract type, device_info, numpy array, and dtype string from a tensor."""
+    if torch is not None and isinstance(item, torch.Tensor):
+        item_type = "torch.Tensor"
+        device_info = f" (device: {item.device})" if hasattr(item, "device") else ""
+        arr = item.detach().cpu().numpy()
+        dtype_str = str(item.dtype)
+        return item_type, device_info, arr, dtype_str
+    if isinstance(item, Image.Image):
+        item_type = "PIL.Image"
+        device_info = f" (mode: {item.mode})"
+        arr = np.array(item)
+        dtype_str = str(arr.dtype)
+        return item_type, device_info, arr, dtype_str
+    if isinstance(item, np.ndarray):
+        item_type = "numpy.ndarray"
+        device_info = ""
+        arr = item
+        dtype_str = str(item.dtype)
+        return item_type, device_info, arr, dtype_str
+    return None
+
+
+def _print_array_stats(arr: NDArray[np.number], *, include_unique: bool = False) -> None:
+    """Print statistics about an array (shape, dtype, range, optionally unique values)."""
+    print(f"Shape: {arr.shape}")
+    print(f"Dtype: {arr.dtype}")
+    if arr.size > 0:
+        arr_min = arr.min()
+        arr_max = arr.max()
+        print(f"Range: {arr_min} - {arr_max}")
+        if include_unique and arr.dtype.kind in ("i", "u"):
+            unique_count = len(np.unique(arr))
+            print(f"Number of unique values: {unique_count}")
+    else:
+        print("Range: N/A (empty array)")
+
+
+def _summary_sequence(tensor: Sequence[TensorLike]) -> None:
+    """Print summary for a sequence of tensors."""
+    print(f"Type: Sequence ({type(tensor).__name__}) of {len(tensor)} tensors")
+    print("Individual tensor info:")
+    for i, item in enumerate(tensor):
+        print(f"  [{i}]:", end=" ")
+        info = _get_tensor_info(item)
+        if info is None:
+            print(f"Unsupported type: {type(item)}")
+            continue
+        item_type, device_info, arr, dtype_str = info
+        print(f"{item_type}{device_info}, Shape: {arr.shape}, Dtype: {dtype_str}")
+
+    batch_arr = _to_numpy(tensor)
+    print("\nProcessed as batch:")
+    _print_array_stats(batch_arr)
+
+
+def _summary_single(tensor: TensorLike) -> None:
+    """Print summary for a single tensor."""
+    info = _get_tensor_info(tensor)
+    if info is None:
+        raise TypeError("Expected torch.Tensor | np.ndarray | PIL.Image | sequence of these")
+    array_type, device_info, arr, dtype_str = info
+
+    print(f"Type: {array_type}{device_info}")
+    print(f"Shape: {arr.shape}")
+    print(f"Dtype: {dtype_str}")
+    if arr.size > 0:
+        arr_min = arr.min()
+        arr_max = arr.max()
+        print(f"Range: {arr_min} - {arr_max}")
+        if arr.dtype.kind in ("i", "u"):
+            unique_count = len(np.unique(arr))
+            print(f"Number of unique values: {unique_count}")
+    else:
+        print("Range: N/A (empty array)")
+
+
 def summary(tensor: TensorLike | Sequence[TensorLike]) -> None:
     """Print summary information about a tensor or array.
 
@@ -372,78 +449,6 @@ def summary(tensor: TensorLike | Sequence[TensorLike]) -> None:
     """
     if _is_sequence_of_tensors(tensor):
         assert isinstance(tensor, Sequence)
-
-        print(f"Type: Sequence ({type(tensor).__name__}) of {len(tensor)} tensors")
-        print("Individual tensor info:")
-        for i, item in enumerate(tensor):
-            print(f"  [{i}]:", end=" ")
-            # Get basic info for each item
-            if torch is not None and isinstance(item, torch.Tensor):
-                item_type = "torch.Tensor"
-                device_info = f" (device: {item.device})" if hasattr(item, "device") else ""
-                arr = item.detach().cpu().numpy()
-                dtype_str = str(item.dtype)
-            elif isinstance(item, Image.Image):
-                item_type = "PIL.Image"
-                device_info = f" (mode: {item.mode})"
-                arr = np.array(item)
-                dtype_str = str(arr.dtype)
-            elif isinstance(item, np.ndarray):
-                item_type = "numpy.ndarray"
-                device_info = ""
-                arr = item
-                dtype_str = str(item.dtype)
-            else:
-                print(f"Unsupported type: {type(item)}")
-                continue
-
-            print(f"{item_type}{device_info}, Shape: {arr.shape}, Dtype: {dtype_str}")
-
-        # Get the actual processed batch array (stacked and padded)
-        batch_arr = _to_numpy(tensor)
-        print("\nProcessed as batch:")
-        print(f"Shape: {batch_arr.shape}")
-        print(f"Dtype: {batch_arr.dtype}")
-        if batch_arr.size > 0:
-            arr_min = batch_arr.min()
-            arr_max = batch_arr.max()
-            print(f"Range: {arr_min} - {arr_max}")
-        return
-
-    # Determine the original type for single tensors
-    if torch is not None and isinstance(tensor, torch.Tensor):
-        array_type = "torch.Tensor"
-        device_info = f" (device: {tensor.device})" if hasattr(tensor, "device") else ""
-        # Convert to numpy for analysis but keep original for type info
-        arr = tensor.detach().cpu().numpy()
-        dtype_str = str(tensor.dtype)
-    elif isinstance(tensor, Image.Image):
-        array_type = "PIL.Image"
-        device_info = f" (mode: {tensor.mode})"
-        # Convert to numpy for analysis
-        arr = np.array(tensor)
-        dtype_str = str(arr.dtype)
-    elif isinstance(tensor, np.ndarray):
-        array_type = "numpy.ndarray"
-        device_info = ""
-        arr = tensor
-        dtype_str = str(tensor.dtype)
+        _summary_sequence(tensor)
     else:
-        raise TypeError("Expected torch.Tensor | np.ndarray | PIL.Image | sequence of these")
-
-    # Basic info
-    print(f"Type: {array_type}{device_info}")
-    print(f"Shape: {arr.shape}")
-    print(f"Dtype: {dtype_str}")
-
-    if arr.size > 0:  # Only if array is not empty
-        arr_min = arr.min()
-        arr_max = arr.max()
-        print(f"Range: {arr_min} - {arr_max}")
-
-        # Number of unique values for integer dtypes
-        if arr.dtype.kind in ("i", "u"):  # signed or unsigned integer
-            unique_count = len(np.unique(arr))
-            print(f"Number of unique values: {unique_count}")
-    else:
-        print("Range: N/A (empty array)")
+        _summary_single(cast(TensorLike, tensor))
