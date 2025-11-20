@@ -109,7 +109,7 @@ def _to_numpy(x: TensorLike | Sequence[TensorLike]) -> NDArray[np.number]:
         numpy_arrays: list[NDArray[np.number]] = []
         for item in x:
             if torch is not None and isinstance(item, torch.Tensor):
-                arr: NDArray[np.number] = item.detach().cpu().numpy()
+                arr = item.detach().cpu().numpy()
             elif isinstance(item, Image.Image):
                 arr = np.array(item)
             elif isinstance(item, np.ndarray):
@@ -132,7 +132,7 @@ def _to_numpy(x: TensorLike | Sequence[TensorLike]) -> NDArray[np.number]:
 
     # Handle single tensor/array/image
     if torch is not None and isinstance(x, torch.Tensor):
-        np_arr: NDArray[np.number] = x.detach().cpu().numpy()
+        np_arr = x.detach().cpu().numpy()
     elif isinstance(x, Image.Image):
         np_arr = np.array(x)
     elif isinstance(x, np.ndarray):
@@ -215,7 +215,7 @@ def _make_grid(numpy_arr: NDArray[np.number]) -> NDArray[np.number]:
     canvas = np.zeros((h * grid_rows, w * grid_cols, c), dtype=numpy_arr.dtype)
     for idx in range(b):
         row, col = divmod(idx, grid_cols)
-        img = cast(NDArray[np.number], numpy_arr[idx])
+        img = numpy_arr[idx]
         if img.ndim == 2:
             img = img[..., np.newaxis]
         canvas[row * h : (row + 1) * h, col * w : (col + 1) * w, :] = img
@@ -227,8 +227,8 @@ def _force_np_arr_to_int_arr(numpy_arr: NDArray[np.number]) -> NDArray[np.uint8]
     if numpy_arr.dtype == np.uint8:
         return cast(NDArray[np.uint8], numpy_arr)
     elif numpy_arr.dtype.kind == "f":  # float type
-        arr_min = cast(float, numpy_arr.min())
-        arr_max = cast(float, numpy_arr.max())
+        arr_min = numpy_arr.min()
+        arr_max = numpy_arr.max()
         # Check if values are in 0-255 range (not normalized 0-1)
         # We check if max > 1.5 to distinguish from normalized 0-1 arrays
         # Require arr_min >= 0 to ensure no negative values (which would indicate
@@ -242,7 +242,7 @@ def _force_np_arr_to_int_arr(numpy_arr: NDArray[np.number]) -> NDArray[np.uint8]
             if np.all(numpy_arr >= 0) and np.all(numpy_arr <= 1):
                 return np.clip(np.round(numpy_arr * 255), 0, 255).astype(np.uint8)
             elif arr_max > arr_min:  # Avoid division by zero
-                normalized: NDArray[np.number] = (numpy_arr - arr_min) / (arr_max - arr_min)
+                normalized = (numpy_arr - arr_min) / (arr_max - arr_min)
                 return np.clip(np.round(normalized * 255), 0, 255).astype(np.uint8)
             else:
                 # All values are the same
@@ -396,8 +396,8 @@ def summary(tensor: TensorLike | Sequence[TensorLike]) -> None:
         print(f"Shape: {batch_arr.shape}")
         print(f"Dtype: {batch_arr.dtype}")
         if batch_arr.size > 0:
-            arr_min = cast(float, batch_arr.min())
-            arr_max = cast(float, batch_arr.max())
+            arr_min = batch_arr.min()
+            arr_max = batch_arr.max()
             print(f"Range: {arr_min} - {arr_max}")
         return
 
@@ -429,13 +429,13 @@ def summary(tensor: TensorLike | Sequence[TensorLike]) -> None:
 
     # Range (min - max)
     if arr.size > 0:  # Only if array is not empty
-        arr_min = cast(float, arr.min())
-        arr_max = cast(float, arr.max())
+        arr_min = arr.min()
+        arr_max = arr.max()
         print(f"Range: {arr_min} - {arr_max}")
 
         # Number of unique values for integer dtypes
         if arr.dtype.kind in ("i", "u"):  # signed or unsigned integer
-            unique_count = len(np.unique(cast(NDArray[np.number], arr)))
+            unique_count = len(np.unique(arr))
             print(f"Number of unique values: {unique_count}")
     else:
         print("Range: N/A (empty array)")

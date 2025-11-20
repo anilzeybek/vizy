@@ -1,5 +1,7 @@
-import numpy as np
 import enum
+
+import numpy as np
+from numpy.typing import NDArray
 
 
 class Array3DFormat(enum.Enum):
@@ -21,7 +23,7 @@ class Array4DFormat(enum.Enum):
     CBHW = enum.auto()  # 3 channels, Batch, Height, Width
 
 
-def detect_3d_array_format(arr: np.ndarray) -> Array3DFormat:
+def detect_3d_array_format(arr: NDArray[np.number]) -> Array3DFormat:
     """Determines whether the array is in HWC, CHW, BHW, or HWB format."""
     if arr.ndim != 3:
         raise ValueError(f"Expected 3D array, got {arr.ndim}D")
@@ -57,7 +59,7 @@ def detect_3d_array_format(arr: np.ndarray) -> Array3DFormat:
             return Array3DFormat.HWB
 
 
-def _ambiguous_3d_format_detection(arr: np.ndarray) -> str:
+def _ambiguous_3d_format_detection(arr: NDArray[np.number]) -> str:
     """
     Smart detection for ambiguous (3, H, W) tensors.
     Returns 'rgb' if likely RGB image, 'batch' if likely 3 grayscale images.
@@ -196,7 +198,7 @@ def _ambiguous_3d_format_detection(arr: np.ndarray) -> str:
         return "batch"
 
 
-def detect_4d_array_format(arr: np.ndarray) -> Array4DFormat:
+def detect_4d_array_format(arr: NDArray[np.number]) -> Array4DFormat:
     """Determine the format of a 4-D numpy array.
 
     Supported layouts (where B - batch, C - channel, H - height, W - width):
@@ -248,7 +250,7 @@ def detect_4d_array_format(arr: np.ndarray) -> Array4DFormat:
     raise ValueError(f"Unable to determine 4D array format for shape {arr.shape}")
 
 
-def _ambiguous_4d_format_detection(arr: np.ndarray) -> str:
+def _ambiguous_4d_format_detection(arr: NDArray[np.number]) -> str:
     """
     Smart detection for ambiguous 4D tensors where both arr.shape[0] and arr.shape[1] are 3.
     Returns 'BCHW' if likely (Batch, Channel, Height, Width) or 'CBHW' if likely (Channel, Batch, Height, Width).
