@@ -1,9 +1,9 @@
-import os
+from pathlib import Path
 
 import imagehash
 import numpy as np
-from PIL import Image
 import torch
+from PIL import Image
 
 import vizy
 
@@ -52,7 +52,7 @@ def image_path_to_array(image_path: str) -> np.ndarray:
 def _resize_image_numpy(
     image: np.ndarray, height_index: int, width_index: int, target_height: int, target_width: int
 ) -> np.ndarray:
-    """Simple nearest neighbor resize using numpy indexing."""
+    """Resize image using simple nearest neighbor and numpy indexing."""
     h_ratio = image.shape[height_index] / target_height
     w_ratio = image.shape[width_index] / target_width
     h_indices = np.round(np.arange(target_height) * h_ratio).astype(int)
@@ -64,7 +64,7 @@ def _resize_image_numpy(
     return resized
 
 
-def images_look_same(img_path1, img_path2, tolerance=2) -> bool:
+def images_look_same(img_path1: str, img_path2: str, tolerance: int = 2) -> bool:
     img1 = Image.open(img_path1).convert("RGB")
     img2 = Image.open(img_path2).convert("RGB")
 
@@ -80,7 +80,7 @@ def images_look_same(img_path1, img_path2, tolerance=2) -> bool:
 ########################
 
 
-def test_hw():
+def test_hw() -> None:
     image = get_test_image0()[..., 0]  # (H, W)
     saved_image_path = vizy.save(image)
     try:
@@ -88,7 +88,7 @@ def test_hw():
             "The saved image does not match the target."
         )
     finally:
-        os.unlink(saved_image_path)
+        Path(saved_image_path).unlink()
 
 
 ########################
@@ -96,25 +96,25 @@ def test_hw():
 ########################
 
 
-def test_hwc():
+def test_hwc() -> None:
     image = get_test_image0()  # (H, W, C)
     saved_image_path = vizy.save(image)
     try:
         assert images_look_same(saved_image_path, get_test_image0_path()), "The saved image does not match the target."
     finally:
-        os.unlink(saved_image_path)
+        Path(saved_image_path).unlink()
 
 
-def test_chw():
+def test_chw() -> None:
     image = get_test_image0().transpose(2, 0, 1)  # (C, H, W)
     saved_image_path = vizy.save(image)
     try:
         assert images_look_same(saved_image_path, get_test_image0_path()), "The saved image does not match the target."
     finally:
-        os.unlink(saved_image_path)
+        Path(saved_image_path).unlink()
 
 
-def test_1hw():
+def test_1hw() -> None:
     image = get_test_image0()[None, ..., 0]  # (B=1, H, W)
     saved_image_path = vizy.save(image)
     try:
@@ -122,10 +122,10 @@ def test_1hw():
             "The saved image does not match the target."
         )
     finally:
-        os.unlink(saved_image_path)
+        Path(saved_image_path).unlink()
 
 
-def test_2hw():
+def test_2hw() -> None:
     image0 = get_test_image0()[..., 0][None, ...]
     image1 = get_test_image1()[..., 0][None, ...]
     image1 = _resize_image_numpy(image1, 1, 2, image0.shape[1], image0.shape[2])
@@ -137,7 +137,7 @@ def test_2hw():
             "The saved image does not match the target."
         )
     finally:
-        os.unlink(saved_image_path)
+        Path(saved_image_path).unlink()
 
 
 ########################
@@ -145,34 +145,34 @@ def test_2hw():
 ########################
 
 
-def test_1hwc():
+def test_1hwc() -> None:
     image = get_test_image0()[None, ...]  # (B=1, H, W, C)
     saved_image_path = vizy.save(image)
     try:
         assert images_look_same(saved_image_path, get_test_image0_path()), "The saved image does not match the target."
     finally:
-        os.unlink(saved_image_path)
+        Path(saved_image_path).unlink()
 
 
-def test_hwc1():
+def test_hwc1() -> None:
     image = get_test_image0()[..., None]  # (H, W, C, B=1)
     saved_image_path = vizy.save(image)
     try:
         assert images_look_same(saved_image_path, get_test_image0_path()), "The saved image does not match the target."
     finally:
-        os.unlink(saved_image_path)
+        Path(saved_image_path).unlink()
 
 
-def test_chw1():
+def test_chw1() -> None:
     image = get_test_image0().transpose(2, 0, 1)[..., None]  # (C, H, W, B=1)
     saved_image_path = vizy.save(image)
     try:
         assert images_look_same(saved_image_path, get_test_image0_path()), "The saved image does not match the target."
     finally:
-        os.unlink(saved_image_path)
+        Path(saved_image_path).unlink()
 
 
-def test_11hw():
+def test_11hw() -> None:
     image = get_test_image0()[None, None, ..., 0]  # (B=1, B=1, H, W)
     saved_image_path = vizy.save(image)
     try:
@@ -180,37 +180,37 @@ def test_11hw():
             "The saved image does not match the target."
         )
     finally:
-        os.unlink(saved_image_path)
+        Path(saved_image_path).unlink()
 
 
-def test_1chw_float():
+def test_1chw_float() -> None:
     image = get_test_image0().transpose(2, 0, 1)[None, ...] / 255.0  # (C, H, W, B=1)
     saved_image_path = vizy.save(image)
     try:
         assert images_look_same(saved_image_path, get_test_image0_path()), "The saved image does not match the target."
     finally:
-        os.unlink(saved_image_path)
+        Path(saved_image_path).unlink()
 
 
-def test_hwc1_full_float():
+def test_hwc1_full_float() -> None:
     image = get_test_image0().transpose(2, 0, 1)[None, ...].astype(np.float32)  # (C, H, W, B=1)
     saved_image_path = vizy.save(image)
     try:
         assert images_look_same(saved_image_path, get_test_image0_path()), "The saved image does not match the target."
     finally:
-        os.unlink(saved_image_path)
+        Path(saved_image_path).unlink()
 
 
-def test_chw1_torch():
+def test_chw1_torch() -> None:
     image = torch.from_numpy(get_test_image0().transpose(2, 0, 1)[None, ...]).float() / 255.0  # (C, H, W, B=1)
     saved_image_path = vizy.save(image)
     try:
         assert images_look_same(saved_image_path, get_test_image0_path()), "The saved image does not match the target."
     finally:
-        os.unlink(saved_image_path)
+        Path(saved_image_path).unlink()
 
 
-def test_2chw_torch():
+def test_2chw_torch() -> None:
     image0 = torch.from_numpy(get_test_image0()).permute(2, 0, 1)[None, ...]
     image1 = torch.from_numpy(get_test_image1()).permute(2, 0, 1)[None, ...]
     # Resize image1 to match image0's height and width.
@@ -223,10 +223,10 @@ def test_2chw_torch():
             "The saved image does not match the target."
         )
     finally:
-        os.unlink(saved_image_path)
+        Path(saved_image_path).unlink()
 
 
-def test_3chw():
+def test_3chw() -> None:
     image0 = torch.from_numpy(get_test_image0().transpose(2, 0, 1)[None, ...])
 
     image1 = torch.from_numpy(get_test_image1().transpose(2, 0, 1)[None, ...])
@@ -242,10 +242,10 @@ def test_3chw():
             "The saved image does not match the target."
         )
     finally:
-        os.unlink(saved_image_path)
+        Path(saved_image_path).unlink()
 
 
-def test_3chw_alt1():
+def test_3chw_alt1() -> None:
     image1 = torch.from_numpy(get_test_image1().transpose(2, 0, 1)[None, ...])
 
     image2 = torch.from_numpy(get_test_image2().transpose(2, 0, 1)[None, ...])
@@ -261,10 +261,10 @@ def test_3chw_alt1():
             "The saved image does not match the target."
         )
     finally:
-        os.unlink(saved_image_path)
+        Path(saved_image_path).unlink()
 
 
-def test_3chw_alt2():
+def test_3chw_alt2() -> None:
     image0 = torch.from_numpy(get_test_image0().transpose(2, 0, 1)[None, ...])
 
     image2 = torch.from_numpy(get_test_image2().transpose(2, 0, 1)[None, ...])
@@ -280,10 +280,10 @@ def test_3chw_alt2():
             "The saved image does not match the target."
         )
     finally:
-        os.unlink(saved_image_path)
+        Path(saved_image_path).unlink()
 
 
-def test_3chw_alt3():
+def test_3chw_alt3() -> None:
     image3 = torch.from_numpy(get_test_image3().transpose(2, 0, 1)[None, ...])
 
     image0 = torch.from_numpy(get_test_image0().transpose(2, 0, 1)[None, ...])
@@ -299,10 +299,10 @@ def test_3chw_alt3():
             "The saved image does not match the target."
         )
     finally:
-        os.unlink(saved_image_path)
+        Path(saved_image_path).unlink()
 
 
-def test_c3hw_torch():
+def test_c3hw_torch() -> None:
     image0 = torch.from_numpy(get_test_image0()).permute(2, 0, 1)[None, ...]
 
     image1 = torch.from_numpy(get_test_image1()).permute(2, 0, 1)[None, ...]
@@ -320,10 +320,10 @@ def test_c3hw_torch():
             "The saved image does not match the target."
         )
     finally:
-        os.unlink(saved_image_path)
+        Path(saved_image_path).unlink()
 
 
-def test_3hwc_float():
+def test_3hwc_float() -> None:
     # Test 3 HWC images with float dtype - should match test_3chw output
     image0 = get_test_image0()[None, ...].astype(np.float32)
 
@@ -340,10 +340,10 @@ def test_3hwc_float():
             "The saved image does not match the target."
         )
     finally:
-        os.unlink(saved_image_path)
+        Path(saved_image_path).unlink()
 
 
-def test_4chw():
+def test_4chw() -> None:
     # Test 4 CHW images in a 2x2 grid
     image0 = get_test_image0().transpose(2, 0, 1)[None, ...]  # 1CHW
 
@@ -363,10 +363,10 @@ def test_4chw():
             "The saved image does not match the target."
         )
     finally:
-        os.unlink(saved_image_path)
+        Path(saved_image_path).unlink()
 
 
-def test_4hwc():
+def test_4hwc() -> None:
     # Test 4 HWC images in a 2x2 grid (should be same result as test_4chw)
     image0 = get_test_image0()[None, ...]  # 1HWC
 
@@ -386,7 +386,7 @@ def test_4hwc():
             "The saved image does not match the target."
         )
     finally:
-        os.unlink(saved_image_path)
+        Path(saved_image_path).unlink()
 
 
 ########################
@@ -394,7 +394,7 @@ def test_4hwc():
 ########################
 
 
-def test_list_hwc():
+def test_list_hwc() -> None:
     image0 = get_test_image0()
     image1 = get_test_image1()
     image2 = get_test_image2()
@@ -407,10 +407,10 @@ def test_list_hwc():
             "The saved image does not match the target."
         )
     finally:
-        os.unlink(saved_image_path)
+        Path(saved_image_path).unlink()
 
 
-def test_list_chw():
+def test_list_chw() -> None:
     image0 = get_test_image0().transpose(2, 0, 1)
     image1 = get_test_image1().transpose(2, 0, 1)
     image2 = get_test_image2().transpose(2, 0, 1)
@@ -423,10 +423,10 @@ def test_list_chw():
             "The saved image does not match the target."
         )
     finally:
-        os.unlink(saved_image_path)
+        Path(saved_image_path).unlink()
 
 
-def test_list_hw():
+def test_list_hw() -> None:
     image0 = get_test_image0()[..., 0]  # (H, W)
     image1 = get_test_image1()[..., 0]  # (H, W)
     image1 = _resize_image_numpy(image1, 0, 1, image0.shape[0], image0.shape[1])
@@ -438,10 +438,10 @@ def test_list_hw():
             "The saved image does not match the target."
         )
     finally:
-        os.unlink(saved_image_path)
+        Path(saved_image_path).unlink()
 
 
-def test_summary():
+def test_summary() -> None:
     # Test summary function with different tensor types
     image = get_test_image0()
 
@@ -467,7 +467,7 @@ def test_summary():
 ########################
 
 
-def test_ambiguous_33hw_bchw():
+def test_ambiguous_33hw_bchw() -> None:
     """Test ambiguous (3, 3, H, W) tensor that should be detected as BCHW (3 RGB images)."""
     # Create 3 distinct RGB-like images with correlated channels
     np.random.seed(42)  # For reproducible test
@@ -496,15 +496,15 @@ def test_ambiguous_33hw_bchw():
     saved_image_path = vizy.save(ambiguous_tensor)
     try:
         # Should create a grid of 3 RGB images
-        assert os.path.exists(saved_image_path)
+        assert Path(saved_image_path).exists()
         # The output should be a valid image grid
         result_img = Image.open(saved_image_path)
         assert result_img.size[0] > 32  # Should be wider due to grid layout
     finally:
-        os.unlink(saved_image_path)
+        Path(saved_image_path).unlink()
 
 
-def test_ambiguous_33hw_cbhw():
+def test_ambiguous_33hw_cbhw() -> None:
     """Test ambiguous (3, 3, H, W) tensor that should be detected as CBHW (3 channels of 3 batch items)."""
     # Create 3 very similar images (same content, different channels)
     np.random.seed(123)
@@ -526,15 +526,16 @@ def test_ambiguous_33hw_cbhw():
 
     saved_image_path = vizy.save(cbhw_tensor)
     try:
-        assert os.path.exists(saved_image_path)
+        assert Path(saved_image_path).exists()
         result_img = Image.open(saved_image_path)
         # Should still create a valid output
-        assert result_img.size[0] > 0 and result_img.size[1] > 0
+        assert result_img.size[0] > 0
+        assert result_img.size[1] > 0
     finally:
-        os.unlink(saved_image_path)
+        Path(saved_image_path).unlink()
 
 
-def test_edge_case_dtypes():
+def test_edge_case_dtypes() -> None:
     """Test various edge case data types."""
     base_image = get_test_image0()[:64, :64]  # Smaller for faster testing
 
@@ -542,36 +543,36 @@ def test_edge_case_dtypes():
     image_int16 = base_image.astype(np.int16)
     saved_path = vizy.save(image_int16)
     try:
-        assert os.path.exists(saved_path)
+        assert Path(saved_path).exists()
     finally:
-        os.unlink(saved_path)
+        Path(saved_path).unlink()
 
     # Test int32
     image_int32 = base_image.astype(np.int32)
     saved_path = vizy.save(image_int32)
     try:
-        assert os.path.exists(saved_path)
+        assert Path(saved_path).exists()
     finally:
-        os.unlink(saved_path)
+        Path(saved_path).unlink()
 
     # Test float64
     image_float64 = (base_image / 255.0).astype(np.float64)
     saved_path = vizy.save(image_float64)
     try:
-        assert os.path.exists(saved_path)
+        assert Path(saved_path).exists()
     finally:
-        os.unlink(saved_path)
+        Path(saved_path).unlink()
 
     # Test boolean array (convert to uint8 since matplotlib has limitations with bool)
     image_bool = (base_image > 127).astype(np.uint8) * 255  # Convert bool to 0/255
     saved_path = vizy.save(image_bool)
     try:
-        assert os.path.exists(saved_path)
+        assert Path(saved_path).exists()
     finally:
-        os.unlink(saved_path)
+        Path(saved_path).unlink()
 
 
-def test_float_range_edge_cases():
+def test_float_range_edge_cases() -> None:
     """Test float arrays in different value ranges."""
     h, w = 32, 32
 
@@ -579,45 +580,45 @@ def test_float_range_edge_cases():
     image_01 = np.random.rand(h, w, 3).astype(np.float32)
     saved_path = vizy.save(image_01)
     try:
-        assert os.path.exists(saved_path)
+        assert Path(saved_path).exists()
     finally:
-        os.unlink(saved_path)
+        Path(saved_path).unlink()
 
     # Test -1 to 1 range
     image_neg1_1 = (np.random.rand(h, w, 3) * 2 - 1).astype(np.float32)
     saved_path = vizy.save(image_neg1_1)
     try:
-        assert os.path.exists(saved_path)
+        assert Path(saved_path).exists()
     finally:
-        os.unlink(saved_path)
+        Path(saved_path).unlink()
 
     # Test very large values
     image_large = (np.random.rand(h, w, 3) * 1000 + 500).astype(np.float32)
     saved_path = vizy.save(image_large)
     try:
-        assert os.path.exists(saved_path)
+        assert Path(saved_path).exists()
     finally:
-        os.unlink(saved_path)
+        Path(saved_path).unlink()
 
     # Test array with some NaN values (should not crash)
     image_with_nan = np.random.rand(h, w, 3).astype(np.float32)
     image_with_nan[0, 0, 0] = np.nan
     saved_path = vizy.save(image_with_nan)
     try:
-        assert os.path.exists(saved_path)
+        assert Path(saved_path).exists()
     finally:
-        os.unlink(saved_path)
+        Path(saved_path).unlink()
 
 
-def test_single_pixel_edge_cases():
+def test_single_pixel_edge_cases() -> None:
     """Test degenerate single pixel and very small images."""
     # 1x1 pixel RGB image (but don't squeeze to avoid dimension issues)
     tiny_img = np.array([[[255, 0, 0]]], dtype=np.uint8)  # (1, 1, 3)
     try:
         saved_path = vizy.save(tiny_img)
         # This might fail due to dimension handling, which is expected behavior
-        assert os.path.exists(saved_path)
-        os.unlink(saved_path)
+        assert Path(saved_path).exists()
+        Path(saved_path).unlink()
     except ValueError:
         # Expected: 1x1 images may cause dimension issues after squeezing
         pass
@@ -626,87 +627,87 @@ def test_single_pixel_edge_cases():
     strip_h = np.random.randint(0, 255, (1, 50, 3), dtype=np.uint8)
     saved_path = vizy.save(strip_h)
     try:
-        assert os.path.exists(saved_path)
+        assert Path(saved_path).exists()
     finally:
-        os.unlink(saved_path)
+        Path(saved_path).unlink()
 
     # Nx1 image (very tall, thin strip)
     strip_v = np.random.randint(0, 255, (50, 1, 3), dtype=np.uint8)
     saved_path = vizy.save(strip_v)
     try:
-        assert os.path.exists(saved_path)
+        assert Path(saved_path).exists()
     finally:
-        os.unlink(saved_path)
+        Path(saved_path).unlink()
 
     # 1x1 grayscale
     tiny_gray = np.array([[128]], dtype=np.uint8)  # (1, 1)
     try:
         saved_path = vizy.save(tiny_gray)
-        assert os.path.exists(saved_path)
-        os.unlink(saved_path)
+        assert Path(saved_path).exists()
+        Path(saved_path).unlink()
     except ValueError:
         # Expected: 1x1 images may cause dimension issues after squeezing
         pass
 
 
-def test_mixed_pil_modes():
+def test_mixed_pil_modes() -> None:
     """Test PIL images in different color modes."""
     # RGBA image
     rgba_img = Image.new("RGBA", (32, 32), color=(255, 128, 0, 200))
     saved_path = vizy.save(rgba_img)
     try:
-        assert os.path.exists(saved_path)
+        assert Path(saved_path).exists()
     finally:
-        os.unlink(saved_path)
+        Path(saved_path).unlink()
 
     # Grayscale PIL image
     gray_img = Image.new("L", (32, 32), color=128)
     saved_path = vizy.save(gray_img)
     try:
-        assert os.path.exists(saved_path)
+        assert Path(saved_path).exists()
     finally:
-        os.unlink(saved_path)
+        Path(saved_path).unlink()
 
     # Palette mode image
     palette_img = Image.new("P", (32, 32))
     palette_img.putpalette([i % 256 for i in range(256 * 3)])  # Simple palette (mod 256)
     saved_path = vizy.save(palette_img)
     try:
-        assert os.path.exists(saved_path)
+        assert Path(saved_path).exists()
     finally:
-        os.unlink(saved_path)
+        Path(saved_path).unlink()
 
 
-def test_format_detection_edge_cases():
+def test_format_detection_edge_cases() -> None:
     """Test format detection for unusual dimension sizes."""
     # Test (4, H, W) - 4 channels, should be detected as batch
     image_4hw = np.random.randint(0, 255, (4, 32, 32), dtype=np.uint8)
     saved_path = vizy.save(image_4hw)
     try:
-        assert os.path.exists(saved_path)
+        assert Path(saved_path).exists()
         # Should create a 2x2 grid for 4 images
     finally:
-        os.unlink(saved_path)
+        Path(saved_path).unlink()
 
     # Test (2, H, W) - 2 channels, should be batch
     image_2hw = np.random.randint(0, 255, (2, 32, 32), dtype=np.uint8)
     saved_path = vizy.save(image_2hw)
     try:
-        assert os.path.exists(saved_path)
+        assert Path(saved_path).exists()
         # Should create side-by-side layout
     finally:
-        os.unlink(saved_path)
+        Path(saved_path).unlink()
 
     # Test very small spatial dimensions with channels
     tiny_spatial = np.random.randint(0, 255, (3, 3, 3), dtype=np.uint8)  # Highly ambiguous
     saved_path = vizy.save(tiny_spatial)
     try:
-        assert os.path.exists(saved_path)
+        assert Path(saved_path).exists()
     finally:
-        os.unlink(saved_path)
+        Path(saved_path).unlink()
 
 
-def test_grid_layout_unusual_batches():
+def test_grid_layout_unusual_batches() -> None:
     """Test grid layouts for unusual batch sizes."""
     base_img = get_test_image0()[:32, :32, 0]  # Small grayscale for speed
 
@@ -714,58 +715,58 @@ def test_grid_layout_unusual_batches():
     images_5 = np.stack([base_img + i * 10 for i in range(5)], axis=0)
     saved_path = vizy.save(images_5)
     try:
-        assert os.path.exists(saved_path)
+        assert Path(saved_path).exists()
         result_img = Image.open(saved_path)
         # Should arrange in roughly square grid
         assert result_img.size[0] >= 32 * 3  # At least 3 columns
     finally:
-        os.unlink(saved_path)
+        Path(saved_path).unlink()
 
     # Test 7 images
     images_7 = np.stack([base_img + i * 10 for i in range(7)], axis=0)
     saved_path = vizy.save(images_7)
     try:
-        assert os.path.exists(saved_path)
+        assert Path(saved_path).exists()
     finally:
-        os.unlink(saved_path)
+        Path(saved_path).unlink()
 
     # Test 10 images
     images_10 = np.stack([base_img + i * 10 for i in range(10)], axis=0)
     saved_path = vizy.save(images_10)
     try:
-        assert os.path.exists(saved_path)
+        assert Path(saved_path).exists()
     finally:
-        os.unlink(saved_path)
+        Path(saved_path).unlink()
 
 
-def test_all_zeros_black_images():
+def test_all_zeros_black_images() -> None:
     """Test arrays that are all zeros (black images)."""
     # All black RGB image
     black_rgb = np.zeros((64, 64, 3), dtype=np.uint8)
     saved_path = vizy.save(black_rgb)
     try:
-        assert os.path.exists(saved_path)
+        assert Path(saved_path).exists()
     finally:
-        os.unlink(saved_path)
+        Path(saved_path).unlink()
 
     # All black grayscale
     black_gray = np.zeros((64, 64), dtype=np.uint8)
     saved_path = vizy.save(black_gray)
     try:
-        assert os.path.exists(saved_path)
+        assert Path(saved_path).exists()
     finally:
-        os.unlink(saved_path)
+        Path(saved_path).unlink()
 
     # Batch of black images
     black_batch = np.zeros((3, 32, 32, 3), dtype=np.uint8)
     saved_path = vizy.save(black_batch)
     try:
-        assert os.path.exists(saved_path)
+        assert Path(saved_path).exists()
     finally:
-        os.unlink(saved_path)
+        Path(saved_path).unlink()
 
 
-def test_torch_device_mixed_types():
+def test_torch_device_mixed_types() -> None:
     """Test tensors on different devices and mixed types in lists."""
     if torch is None:
         return  # Skip if torch not available
@@ -779,21 +780,21 @@ def test_torch_device_mixed_types():
     mixed_list = [base_img, cpu_tensor.permute(1, 2, 0).numpy()]
     saved_path = vizy.save(mixed_list)
     try:
-        assert os.path.exists(saved_path)
+        assert Path(saved_path).exists()
     finally:
-        os.unlink(saved_path)
+        Path(saved_path).unlink()
 
     # Test CUDA if available
     if torch.cuda.is_available():
         cuda_tensor = cpu_tensor.cuda()
         saved_path = vizy.save(cuda_tensor)
         try:
-            assert os.path.exists(saved_path)
+            assert Path(saved_path).exists()
         finally:
-            os.unlink(saved_path)
+            Path(saved_path).unlink()
 
 
-def test_large_batch_performance():
+def test_large_batch_performance() -> None:
     """Test performance and correctness with large batch sizes."""
     # Create a batch of 20 small images to test grid layout and performance
     small_img = np.random.randint(0, 255, (16, 16, 3), dtype=np.uint8)
@@ -801,29 +802,29 @@ def test_large_batch_performance():
 
     saved_path = vizy.save(large_batch)
     try:
-        assert os.path.exists(saved_path)
+        assert Path(saved_path).exists()
         result_img = Image.open(saved_path)
         # Should create a reasonable grid (likely 5x4 or similar)
         expected_min_width = 16 * 4  # At least 4 columns
         assert result_img.size[0] >= expected_min_width
     finally:
-        os.unlink(saved_path)
+        Path(saved_path).unlink()
 
 
-def test_bchw_two_fullhd_grayscale_side_by_side():
+def test_bchw_two_fullhd_grayscale_side_by_side() -> None:
     """BCHW tensor (2, 1, 1080, 1920) should render two 1080p grayscale images side-by-side."""
     tensor = torch.randint(0, 256, (2, 1, 1080, 1920), dtype=torch.uint8)
     saved_path = vizy.save(tensor)
     try:
-        assert os.path.exists(saved_path)
+        assert Path(saved_path).exists()
         img = Image.open(saved_path)
         # Expect width 2*1920 and height 1080
         assert img.size == (1920 * 2, 1080)
     finally:
-        os.unlink(saved_path)
+        Path(saved_path).unlink()
 
 
-def main():
+def main() -> None:
     test_hwc()
 
 
