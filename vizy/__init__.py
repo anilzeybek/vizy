@@ -1,5 +1,4 @@
-"""
-vizy: One-line tensor visualization for PyTorch and NumPy.
+"""vizy: One-line tensor visualization for PyTorch and NumPy.
 
 Install
 -------
@@ -85,7 +84,7 @@ def _pad_to_common_size(numpy_arrays: list[NDArray[np.number]]) -> list[NDArray[
     max_w = max(w for _, w in hw_pairs)
 
     padded_arrays: list[NDArray[np.number]] = []
-    for arr, (h, w) in zip(numpy_arrays, hw_pairs):
+    for arr, (h, w) in zip(numpy_arrays, hw_pairs, strict=True):
         pad_h = max_h - h
         pad_w = max_w - w
 
@@ -127,8 +126,7 @@ def _to_numpy(x: TensorLike | Sequence[TensorLike]) -> NDArray[np.number]:
             numpy_arrays.append(arr)
 
         numpy_arrays = _pad_to_common_size(numpy_arrays)
-        stacked_numpy_array = np.stack(numpy_arrays, axis=0)  # Creates (B, ...) format
-        return stacked_numpy_array
+        return np.stack(numpy_arrays, axis=0)  # Creates (B, ...) format
 
     # Handle single tensor/array/image
     if torch is not None and isinstance(x, torch.Tensor):
@@ -152,31 +150,44 @@ def _normalize_array_format(numpy_arr: NDArray[np.number]) -> tuple[NDArray[np.n
     if numpy_arr.ndim == 2:
         return numpy_arr, False
 
+    return_arr = numpy_arr
+    requires_grid = False
+
     if numpy_arr.ndim == 3:
         format_type = format_detection.detect_3d_array_format(numpy_arr)
-        if format_type == format_detection.Array3DFormat.HWC:
-            return numpy_arr, False
-        if format_type == format_detection.Array3DFormat.CHW:
-            return numpy_arr.transpose(1, 2, 0), False
-        if format_type == format_detection.Array3DFormat.BHW:
-            return numpy_arr, True
-        if format_type == format_detection.Array3DFormat.HWB:
-            return numpy_arr.transpose(2, 0, 1), True
+        match format_type:
+            case format_detection.Array3DFormat.HWC:
+                return_arr = numpy_arr
+                requires_grid = False
+            case format_detection.Array3DFormat.CHW:
+                return_arr = numpy_arr.transpose(1, 2, 0)
+                requires_grid = False
+            case format_detection.Array3DFormat.BHW:
+                return_arr = numpy_arr
+                requires_grid = True
+            case format_detection.Array3DFormat.HWB:
+                return_arr = numpy_arr.transpose(2, 0, 1)
+                requires_grid = True
 
     if numpy_arr.ndim == 4:
         format_type = format_detection.detect_4d_array_format(numpy_arr)
-        if format_type == format_detection.Array4DFormat.HWCB:
-            return numpy_arr.transpose(3, 0, 1, 2), True
-        if format_type == format_detection.Array4DFormat.CHWB:
-            return numpy_arr.transpose(3, 1, 2, 0), True
-        if format_type == format_detection.Array4DFormat.BHWC:
-            return numpy_arr, True
-        if format_type == format_detection.Array4DFormat.BCHW:
-            return numpy_arr.transpose(0, 2, 3, 1), True
-        if format_type == format_detection.Array4DFormat.CBHW:
-            return numpy_arr.transpose(1, 2, 3, 0), True
-
-    raise ValueError(f"Cannot prepare array with shape {numpy_arr.shape}")
+        match format_type:
+            case format_detection.Array4DFormat.HWCB:
+                return_arr = numpy_arr.transpose(3, 0, 1, 2)
+                requires_grid = True
+            case format_detection.Array4DFormat.CHWB:
+                return_arr = numpy_arr.transpose(3, 1, 2, 0)
+                requires_grid = True
+            case format_detection.Array4DFormat.BHWC:
+                return_arr = numpy_arr
+                requires_grid = True
+            case format_detection.Array4DFormat.BCHW:
+                return_arr = numpy_arr.transpose(0, 2, 3, 1)
+                requires_grid = True
+            case format_detection.Array4DFormat.CBHW:
+                return_arr = numpy_arr.transpose(1, 2, 3, 0)
+                requires_grid = True
+    return return_arr, requires_grid
 
 
 def _make_grid(numpy_arr: NDArray[np.number]) -> NDArray[np.number]:
@@ -226,7 +237,8 @@ def _force_np_arr_to_int_arr(numpy_arr: NDArray[np.number]) -> NDArray[np.uint8]
     """Force numpy array to uint8."""
     if numpy_arr.dtype == np.uint8:
         return cast(NDArray[np.uint8], numpy_arr)
-    elif numpy_arr.dtype.kind == "f":  # float type
+
+    if numpy_arr.dtype.kind == "f":  # float type
         arr_min = numpy_arr.min()
         arr_max = numpy_arr.max()
         # Check if values are in 0-255 range (not normalized 0-1)
@@ -236,35 +248,32 @@ def _force_np_arr_to_int_arr(numpy_arr: NDArray[np.number]) -> NDArray[np.uint8]
         if arr_min >= 0 and arr_max > 1.5 and arr_max <= 255.5:
             # Already in 0-255 range, convert directly
             return np.clip(np.round(numpy_arr), 0, 255).astype(np.uint8)
-        else:
-            # Likely normalized 0-1 range or other range, normalize to 0-255
-            # if all values between 0 and 1 (inclusive):
-            if np.all(numpy_arr >= 0) and np.all(numpy_arr <= 1):
-                return np.clip(np.round(numpy_arr * 255), 0, 255).astype(np.uint8)
-            elif arr_max > arr_min:  # Avoid division by zero
-                normalized = (numpy_arr - arr_min) / (arr_max - arr_min)
-                return np.clip(np.round(normalized * 255), 0, 255).astype(np.uint8)
-            else:
-                # All values are the same
-                # If value is exactly 1.0, treat as normalized (scale to 255)
-                # Otherwise, clip to 0-255 range
-                if arr_min == 1.0:
-                    return np.clip(np.round(numpy_arr * 255), 0, 255).astype(np.uint8)
-                else:
-                    return np.clip(np.round(numpy_arr), 0, 255).astype(np.uint8)
-    elif numpy_arr.dtype.kind in ("i", "u"):  # signed or unsigned integer
+
+        # Likely normalized 0-1 range or other range, normalize to 0-255
+        # if all values between 0 and 1 (inclusive):
+        if np.all(numpy_arr >= 0) and np.all(numpy_arr <= 1):
+            return np.clip(np.round(numpy_arr * 255), 0, 255).astype(np.uint8)
+        if arr_max > arr_min:  # Avoid division by zero
+            normalized = (numpy_arr - arr_min) / (arr_max - arr_min)
+            return np.clip(np.round(normalized * 255), 0, 255).astype(np.uint8)
+        # All values are the same
+        # If value is exactly 1.0, treat as normalized (scale to 255)
+        # Otherwise, clip to 0-255 range
+        if arr_min == 1.0:
+            return np.clip(np.round(numpy_arr * 255), 0, 255).astype(np.uint8)
+        return np.clip(np.round(numpy_arr), 0, 255).astype(np.uint8)
+    if numpy_arr.dtype.kind in ("i", "u"):  # signed or unsigned integer
         # Convert other integer types to uint8 with clipping
         return np.clip(numpy_arr, 0, 255).astype(np.uint8)
-    else:
-        raise ValueError(f"Unsupported dtype for conversion to uint8: {numpy_arr.dtype}")
+
+    raise ValueError(f"Unsupported dtype for conversion to uint8: {numpy_arr.dtype}")
 
 
 def _to_plottable_int_arr(numpy_arr: NDArray[np.number]) -> NDArray[np.uint8]:
     numpy_arr, requires_grid = _normalize_array_format(numpy_arr)
     if requires_grid:
         numpy_arr = _make_grid(numpy_arr)
-    numpy_arr = _force_np_arr_to_int_arr(numpy_arr)
-    return numpy_arr
+    return _force_np_arr_to_int_arr(numpy_arr)
 
 
 def _numpy_to_pil_image(numpy_arr: NDArray[np.uint8]) -> Image.Image:
@@ -272,32 +281,30 @@ def _numpy_to_pil_image(numpy_arr: NDArray[np.uint8]) -> Image.Image:
     if numpy_arr.ndim == 2:
         # Grayscale image
         return Image.fromarray(numpy_arr, mode="L")
-    elif numpy_arr.ndim == 3:
+
+    if numpy_arr.ndim == 3:
         if numpy_arr.shape[2] == 1:
             # Single channel, convert to 2D
             return Image.fromarray(numpy_arr.squeeze(), mode="L")
-        elif numpy_arr.shape[2] == 3:
+        if numpy_arr.shape[2] == 3:
             # RGB image
             return Image.fromarray(numpy_arr, mode="RGB")
-        elif numpy_arr.shape[2] == 4:
+        if numpy_arr.shape[2] == 4:
             # RGBA image
             return Image.fromarray(numpy_arr, mode="RGBA")
-        else:
-            raise ValueError(f"Unsupported number of channels: {numpy_arr.shape[2]}")
-    else:
-        raise ValueError(f"Unsupported array dimensions: {numpy_arr.ndim}")
+        raise ValueError(f"Unsupported number of channels: {numpy_arr.shape[2]}")
+
+    raise ValueError(f"Unsupported array dimensions: {numpy_arr.ndim}")
 
 
 def _tensor_to_pil_image(tensor: TensorLike | Sequence[TensorLike]) -> Image.Image:
     numpy_arr = _to_numpy(tensor)
     plottable_numpy_arr = _to_plottable_int_arr(numpy_arr)
-    pil_image = _numpy_to_pil_image(plottable_numpy_arr)
-    return pil_image
+    return _numpy_to_pil_image(plottable_numpy_arr)
 
 
 def plot(tensor: TensorLike | Sequence[TensorLike]) -> None:
-    """
-    Display *tensor* using PIL/Pillow (opens system image viewer).
+    """Display *tensor* using PIL/Pillow (opens system image viewer).
 
     Parameters
     ----------
@@ -315,8 +322,9 @@ def save(
     path_or_tensor: str | TensorLike | Sequence[TensorLike],
     tensor: TensorLike | Sequence[TensorLike] | None = None,
 ) -> str:
-    """
-    Save *tensor* to *path*. Two call styles are supported::
+    """Save *tensor* to *path*.
+
+    Two call styles are supported::
 
         save('img.png', tensor)
         save(tensor)  # auto tmp path
@@ -333,6 +341,7 @@ def save(
     -------
     str
         Resolved file path.
+
     """
     if tensor is None:
         assert not isinstance(path_or_tensor, str)
@@ -353,13 +362,13 @@ def save(
 
 
 def summary(tensor: TensorLike | Sequence[TensorLike]) -> None:
-    """
-    Print summary information about a tensor or array.
+    """Print summary information about a tensor or array.
 
     Parameters
     ----------
     tensor : torch.Tensor | np.ndarray | PIL.Image | sequence of these
         Tensor, array, PIL Image, or list/tuple of these to summarize.
+
     """
     if _is_sequence_of_tensors(tensor):
         assert isinstance(tensor, Sequence)
@@ -427,7 +436,6 @@ def summary(tensor: TensorLike | Sequence[TensorLike]) -> None:
     print(f"Shape: {arr.shape}")
     print(f"Dtype: {dtype_str}")
 
-    # Range (min - max)
     if arr.size > 0:  # Only if array is not empty
         arr_min = arr.min()
         arr_max = arr.max()

@@ -24,7 +24,7 @@ class Array4DFormat(enum.Enum):
 
 
 def detect_3d_array_format(arr: NDArray[np.number]) -> Array3DFormat:
-    """Determines whether the array is in HWC, CHW, BHW, or HWB format."""
+    """Determine whether the array is in HWC, CHW, BHW, or HWB format."""
     if arr.ndim != 3:
         raise ValueError(f"Expected 3D array, got {arr.ndim}D")
 
@@ -44,24 +44,18 @@ def detect_3d_array_format(arr: NDArray[np.number]) -> Array3DFormat:
             format_type = _ambiguous_3d_format_detection(arr)
             if format_type == "rgb":
                 return Array3DFormat.CHW  # 3 color channels
-            else:
-                return Array3DFormat.BHW  # 3 batch items
-        elif channel_dim == 1:
+            return Array3DFormat.BHW  # 3 batch items
+        if channel_dim == 1:
             return Array3DFormat.HWB if d2 > d1 else Array3DFormat.BHW
-        else:
-            return Array3DFormat.HWC
-
-    else:
-        # Then it's either (H,W,B) or (B,H,W)
-        if d0 < d1 and d0 < d2:
-            return Array3DFormat.BHW
-        else:
-            return Array3DFormat.HWB
+        return Array3DFormat.HWC
+    if d0 < d1 and d0 < d2:
+        return Array3DFormat.BHW
+    return Array3DFormat.HWB
 
 
 def _ambiguous_3d_format_detection(arr: NDArray[np.number]) -> str:
-    """
-    Smart detection for ambiguous (3, H, W) tensors.
+    """Smart detection for ambiguous (3, H, W) tensors.
+
     Returns 'rgb' if likely RGB image, 'batch' if likely 3 grayscale images.
 
     Uses multiple heuristics:
@@ -194,8 +188,7 @@ def _ambiguous_3d_format_detection(arr: NDArray[np.number]) -> str:
     # Decision: require strong evidence for RGB interpretation
     if rgb_score >= 2:
         return "rgb"
-    else:
-        return "batch"
+    return "batch"
 
 
 def detect_4d_array_format(arr: NDArray[np.number]) -> Array4DFormat:
@@ -251,8 +244,8 @@ def detect_4d_array_format(arr: NDArray[np.number]) -> Array4DFormat:
 
 
 def _ambiguous_4d_format_detection(arr: NDArray[np.number]) -> str:
-    """
-    Smart detection for ambiguous 4D tensors where both arr.shape[0] and arr.shape[1] are 3.
+    """Smart detection for ambiguous 4D tensors where both arr.shape[0] and arr.shape[1] are 3.
+
     Returns 'BCHW' if likely (Batch, Channel, Height, Width) or 'CBHW' if likely (Channel, Batch, Height, Width).
 
     Uses heuristics based on the assumption that:
