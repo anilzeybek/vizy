@@ -2,6 +2,7 @@ from pathlib import Path
 
 import imagehash
 import numpy as np
+import pytest
 import torch
 from PIL import Image
 
@@ -601,14 +602,11 @@ def test_float_range_edge_cases() -> None:
     finally:
         Path(saved_path).unlink()
 
-    # Test array with some NaN values (should not crash)
+    # Test array with some NaN values (should raise ValueError)
     image_with_nan = rng.random((h, w, 3), dtype=np.float32)
     image_with_nan[0, 0, 0] = np.nan
-    saved_path = vizy.save(image_with_nan)
-    try:
-        assert Path(saved_path).exists()
-    finally:
-        Path(saved_path).unlink()
+    with pytest.raises(ValueError, match="Cannot plot array with NaN values"):
+        vizy.save(image_with_nan)
 
 
 def test_single_pixel_edge_cases() -> None:

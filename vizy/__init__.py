@@ -299,6 +299,8 @@ def _numpy_to_pil_image(numpy_arr: NDArray[np.uint8]) -> Image.Image:
 
 def _tensor_to_pil_image(tensor: TensorLike | Sequence[TensorLike]) -> Image.Image:
     numpy_arr = _to_numpy(tensor)
+    if np.any(np.isnan(numpy_arr)):
+        raise ValueError("Cannot plot array with NaN values")
     plottable_numpy_arr = _to_plottable_int_arr(numpy_arr)
     return _numpy_to_pil_image(plottable_numpy_arr)
 
