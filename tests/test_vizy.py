@@ -57,11 +57,12 @@ class TestNormalizeArrayFormat:
 
     def test_invalid_dimensions(self) -> None:
         """Test that arrays with unsupported dimensions raise ValueError."""
+        rng = np.random.default_rng(42)
         with pytest.raises(ValueError, match="Unable to determine 4D array format"):
-            vizy._normalize_array_format(np.random.rand(10, 20, 30, 40))  # noqa: SLF001
+            vizy._normalize_array_format(rng.random((10, 20, 30, 40)))  # noqa: SLF001
 
         with pytest.raises(ValueError, match="Cannot prepare array"):
-            vizy._normalize_array_format(np.random.rand(10))  # noqa: SLF001
+            vizy._normalize_array_format(rng.random((10,)))  # noqa: SLF001
 
 
 class TestPrep:
@@ -69,26 +70,30 @@ class TestPrep:
 
     def test_2d_array(self) -> None:
         """Test preparation of 2D arrays."""
-        arr = np.random.rand(50, 60)
+        rng = np.random.default_rng(42)
+        arr = rng.random((50, 60))
         result, _ = vizy._normalize_array_format(arr)  # noqa: SLF001
         assert result.shape == (50, 60)
         assert result.ndim == 2
 
     def test_3d_array_hwc(self) -> None:
         """Test preparation of 3D arrays in HWC format."""
-        arr = np.random.rand(50, 60, 3)
+        rng = np.random.default_rng(42)
+        arr = rng.random((50, 60, 3))
         result, _ = vizy._normalize_array_format(arr)  # noqa: SLF001
         assert result.shape == (50, 60, 3)
 
     def test_3d_array_chw(self) -> None:
         """Test preparation of 3D arrays in CHW format."""
-        arr = np.random.rand(3, 50, 60)
+        rng = np.random.default_rng(42)
+        arr = rng.random((3, 50, 60))
         result, _ = vizy._normalize_array_format(arr)  # noqa: SLF001
         assert result.shape in ((50, 60, 3), (3, 50, 60))
 
     def test_4d_bchw(self) -> None:
         """Test preparation of 4D arrays in BCHW format."""
-        arr = np.random.rand(4, 3, 50, 60)  # B, C, H, W
+        rng = np.random.default_rng(42)
+        arr = rng.random((4, 3, 50, 60))  # B, C, H, W
         result, _ = vizy._normalize_array_format(arr)  # noqa: SLF001
         expected = np.transpose(arr, (0, 2, 3, 1))  # B, H, W, C
         assert result.shape == (4, 50, 60, 3)
@@ -96,7 +101,8 @@ class TestPrep:
 
     def test_4d_cbhw_to_bchw(self) -> None:
         """Test conversion from CBHW to BCHW format."""
-        arr = np.random.rand(3, 4, 50, 60)  # C, B, H, W
+        rng = np.random.default_rng(42)
+        arr = rng.random((3, 4, 50, 60))  # C, B, H, W
         result, _ = vizy._normalize_array_format(arr)  # noqa: SLF001
         expected = np.transpose(arr, (1, 2, 3, 0))  # B, H, W, C
         assert result.shape == (4, 50, 60, 3)
@@ -104,7 +110,8 @@ class TestPrep:
 
     def test_4d_single_channel(self) -> None:
         """Test 4D arrays with single channel."""
-        arr = np.random.rand(4, 1, 50, 60)  # B, C=1, H, W
+        rng = np.random.default_rng(42)
+        arr = rng.random((4, 1, 50, 60))  # B, C=1, H, W
         result, _ = vizy._normalize_array_format(arr)  # noqa: SLF001
         expected = np.squeeze(arr, axis=1)  # B, H, W, C
         assert result.shape == (4, 50, 60)
@@ -112,28 +119,32 @@ class TestPrep:
 
     def test_4d_bhwc_unchanged(self) -> None:
         """Test that 4D arrays already in BHWC format are returned unchanged."""
-        arr = np.random.rand(4, 50, 60, 3)  # B, H, W, C
+        rng = np.random.default_rng(42)
+        arr = rng.random((4, 50, 60, 3))  # B, H, W, C
         result, _ = vizy._normalize_array_format(arr)  # noqa: SLF001
         assert result.shape == (4, 50, 60, 3)
         assert np.array_equal(result, arr)
 
     def test_squeeze_behavior(self) -> None:
         """Test that arrays are properly squeezed."""
-        arr = np.random.rand(1, 1, 50, 60, 1)
+        rng = np.random.default_rng(42)
+        arr = rng.random((1, 1, 50, 60, 1))
         result, _ = vizy._normalize_array_format(arr)  # noqa: SLF001
         assert result.shape == (50, 60)
 
     def test_invalid_4d_shape(self) -> None:
         """Test that invalid 4D shapes raise ValueError."""
+        rng = np.random.default_rng(42)
         # Neither dimension 0 nor 1 is a valid channel count
-        arr = np.random.rand(5, 7, 50, 60)
+        arr = rng.random((5, 7, 50, 60))
         with pytest.raises(ValueError, match="Unable to determine 4D array format"):
             vizy._normalize_array_format(arr)  # noqa: SLF001
 
     def test_invalid_dimensions(self) -> None:
         """Test that unsupported dimensions raise ValueError."""
+        rng = np.random.default_rng(42)
         with pytest.raises(ValueError, match="Cannot prepare array"):
-            vizy._normalize_array_format(np.random.rand(10, 20, 30, 40, 50))  # noqa: SLF001
+            vizy._normalize_array_format(rng.random((10, 20, 30, 40, 50)))  # noqa: SLF001
 
 
 class TestMakeGrid:
@@ -141,43 +152,50 @@ class TestMakeGrid:
 
     def test_single_image(self) -> None:
         """Test grid creation with single image."""
-        bhwc = np.random.rand(1, 32, 32, 3)
+        rng = np.random.default_rng(42)
+        bhwc = rng.random((1, 32, 32, 3))
         result = vizy._make_grid(bhwc)  # noqa: SLF001
         assert result.shape == (32, 32, 3)
 
     def test_two_images(self) -> None:
         """Test grid creation with two images (side by side)."""
-        bhwc = np.random.rand(2, 32, 32, 3)
+        rng = np.random.default_rng(42)
+        bhwc = rng.random((2, 32, 32, 3))
         result = vizy._make_grid(bhwc)  # noqa: SLF001
         assert result.shape == (32, 64, 3)  # 1 row, 2 cols
 
     def test_three_images(self) -> None:
         """Test grid creation with three images (all in a row)."""
-        bhwc = np.random.rand(3, 32, 32, 3)
+        rng = np.random.default_rng(42)
+        bhwc = rng.random((3, 32, 32, 3))
         result = vizy._make_grid(bhwc)  # noqa: SLF001
         assert result.shape == (32, 96, 3)  # 1 row, 3 cols
 
     def test_four_images(self) -> None:
         """Test grid creation with four images (2x2 grid)."""
-        bhwc = np.random.rand(4, 32, 32, 3)
+        rng = np.random.default_rng(42)
+        bhwc = rng.random((4, 32, 32, 3))
         result = vizy._make_grid(bhwc)  # noqa: SLF001
         assert result.shape == (64, 64, 3)  # 2 rows, 2 cols
 
     def test_larger_batch(self) -> None:
         """Test grid creation with larger batch."""
-        bhwc = np.random.rand(9, 32, 32, 3)
+        rng = np.random.default_rng(42)
+        bhwc = rng.random((9, 32, 32, 3))
         result = vizy._make_grid(bhwc)  # noqa: SLF001
         assert result.shape == (96, 96, 3)  # 3 rows, 3 cols
 
     def test_single_channel(self) -> None:
         """Test grid creation with single channel images."""
-        bhwc = np.random.rand(4, 32, 32, 1)
+        rng = np.random.default_rng(42)
+        bhwc = rng.random((4, 32, 32, 1))
         result = vizy._make_grid(bhwc)  # noqa: SLF001
         assert result.shape == (64, 64, 1)
 
     def test_non_square_images(self) -> None:
         """Test grid creation with non-square images."""
-        bhwc = np.random.rand(4, 20, 30, 3)
+        rng = np.random.default_rng(42)
+        bhwc = rng.random((4, 20, 30, 3))
         result = vizy._make_grid(bhwc)  # noqa: SLF001
         assert result.shape == (40, 60, 3)  # 2 rows, 2 cols
 
@@ -192,8 +210,9 @@ class TestPadToCommonSize:
 
     def test_same_size_2d_arrays(self) -> None:
         """Test that same-size 2D arrays remain unchanged."""
-        arr1 = np.random.rand(32, 32)
-        arr2 = np.random.rand(32, 32)
+        rng = np.random.default_rng(42)
+        arr1 = rng.random((32, 32))
+        arr2 = rng.random((32, 32))
         result = vizy._pad_to_common_size([arr1, arr2])  # noqa: SLF001
         assert len(result) == 2
         assert np.array_equal(result[0], arr1)
@@ -201,8 +220,9 @@ class TestPadToCommonSize:
 
     def test_different_size_2d_arrays(self) -> None:
         """Test padding of different-size 2D arrays."""
-        arr1 = np.random.rand(20, 30)
-        arr2 = np.random.rand(40, 50)
+        rng = np.random.default_rng(42)
+        arr1 = rng.random((20, 30))
+        arr2 = rng.random((40, 50))
         result = vizy._pad_to_common_size([arr1, arr2])  # noqa: SLF001
         assert len(result) == 2
         assert result[0].shape == (40, 50)
@@ -216,8 +236,9 @@ class TestPadToCommonSize:
 
     def test_different_size_3d_hwc_arrays(self) -> None:
         """Test padding of different-size 3D HWC arrays."""
-        arr1 = np.random.rand(20, 30, 3)
-        arr2 = np.random.rand(40, 50, 3)
+        rng = np.random.default_rng(42)
+        arr1 = rng.random((20, 30, 3))
+        arr2 = rng.random((40, 50, 3))
         result = vizy._pad_to_common_size([arr1, arr2])  # noqa: SLF001
         assert len(result) == 2
         assert result[0].shape == (40, 50, 3)
@@ -225,8 +246,9 @@ class TestPadToCommonSize:
 
     def test_different_size_3d_chw_arrays(self) -> None:
         """Test padding of different-size 3D CHW arrays."""
-        arr1 = np.random.rand(3, 20, 30)
-        arr2 = np.random.rand(3, 40, 50)
+        rng = np.random.default_rng(42)
+        arr1 = rng.random((3, 20, 30))
+        arr2 = rng.random((3, 40, 50))
         result = vizy._pad_to_common_size([arr1, arr2])  # noqa: SLF001
         assert len(result) == 2
         assert result[0].shape == (3, 40, 50)
@@ -308,20 +330,23 @@ class TestPrepareForDisplay:
 
     def test_2d_array(self) -> None:
         """Test preparation of 2D array for display."""
-        arr = np.random.rand(50, 60)
+        rng = np.random.default_rng(42)
+        arr = rng.random((50, 60))
         result = vizy._to_plottable_int_arr(arr)  # noqa: SLF001
         assert result.shape == (50, 60)
         assert result.ndim == 2
 
     def test_3d_array(self) -> None:
         """Test preparation of 3D array for display."""
-        arr = np.random.rand(50, 60, 3)
+        rng = np.random.default_rng(42)
+        arr = rng.random((50, 60, 3))
         result = vizy._to_plottable_int_arr(arr)  # noqa: SLF001
         assert result.shape == (50, 60, 3)
 
     def test_4d_array_to_grid(self) -> None:
         """Test that 4D arrays are converted to grids."""
-        arr = np.random.rand(4, 3, 32, 32)
+        rng = np.random.default_rng(42)
+        arr = rng.random((4, 3, 32, 32))
         result = vizy._to_plottable_int_arr(arr)  # noqa: SLF001
         assert result.ndim == 3
         assert result.shape[2] == 3  # RGB channels
@@ -340,7 +365,8 @@ class TestSave:
 
     def test_save_with_path(self) -> None:
         """Test saving with explicit path."""
-        arr = np.random.rand(50, 60, 3)
+        rng = np.random.default_rng(42)
+        arr = rng.random((50, 60, 3))
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
             tmp_path = tmp.name
 
@@ -356,7 +382,8 @@ class TestSave:
 
     def test_save_auto_path(self) -> None:
         """Test saving with automatic path generation."""
-        arr = np.random.rand(50, 60, 3)
+        rng = np.random.default_rng(42)
+        arr = rng.random((50, 60, 3))
 
         with patch("builtins.print") as mock_print:
             result_path = vizy.save(arr)
@@ -386,7 +413,8 @@ class TestSave:
 
     def test_save_with_kwargs(self) -> None:
         """Test saving with additional kwargs."""
-        arr = np.random.rand(50, 60, 3)  # Use RGB to avoid cmap conflict
+        rng = np.random.default_rng(42)
+        arr = rng.random((50, 60, 3))  # Use RGB to avoid cmap conflict
 
         with patch("builtins.print") as mock_print:
             result_path = vizy.save(arr)
@@ -404,7 +432,8 @@ class TestSummary:
 
     def test_summary_numpy_array(self) -> None:
         """Test summary for numpy array."""
-        arr = np.random.randint(0, 256, size=(50, 60, 3), dtype=np.uint8)
+        rng = np.random.default_rng(42)
+        arr = rng.integers(0, 256, size=(50, 60, 3), dtype=np.uint8)
 
         with patch("builtins.print") as mock_print:
             vizy.summary(arr)
@@ -472,7 +501,8 @@ class TestNumpyToPilImage:
 
     def test_2d_grayscale(self) -> None:
         """Test conversion of 2D array to grayscale PIL image."""
-        arr = np.random.randint(0, 255, (32, 32), dtype=np.uint8)
+        rng = np.random.default_rng(42)
+        arr = rng.integers(0, 255, (32, 32), dtype=np.uint8)
         pil_img = vizy._numpy_to_pil_image(arr)  # noqa: SLF001
         assert isinstance(pil_img, Image.Image)
         assert pil_img.mode == "L"
@@ -480,7 +510,8 @@ class TestNumpyToPilImage:
 
     def test_3d_single_channel(self) -> None:
         """Test conversion of 3D array with single channel."""
-        arr = np.random.randint(0, 255, (32, 32, 1), dtype=np.uint8)
+        rng = np.random.default_rng(42)
+        arr = rng.integers(0, 255, (32, 32, 1), dtype=np.uint8)
         pil_img = vizy._numpy_to_pil_image(arr)  # noqa: SLF001
         assert isinstance(pil_img, Image.Image)
         assert pil_img.mode == "L"
@@ -488,7 +519,8 @@ class TestNumpyToPilImage:
 
     def test_3d_rgb(self) -> None:
         """Test conversion of 3D array with RGB channels."""
-        arr = np.random.randint(0, 255, (32, 32, 3), dtype=np.uint8)
+        rng = np.random.default_rng(42)
+        arr = rng.integers(0, 255, (32, 32, 3), dtype=np.uint8)
         pil_img = vizy._numpy_to_pil_image(arr)  # noqa: SLF001
         assert isinstance(pil_img, Image.Image)
         assert pil_img.mode == "RGB"
@@ -496,7 +528,8 @@ class TestNumpyToPilImage:
 
     def test_3d_rgba(self) -> None:
         """Test conversion of 3D array with RGBA channels."""
-        arr = np.random.randint(0, 255, (32, 32, 4), dtype=np.uint8)
+        rng = np.random.default_rng(42)
+        arr = rng.integers(0, 255, (32, 32, 4), dtype=np.uint8)
         pil_img = vizy._numpy_to_pil_image(arr)  # noqa: SLF001
         assert isinstance(pil_img, Image.Image)
         assert pil_img.mode == "RGBA"
@@ -504,13 +537,15 @@ class TestNumpyToPilImage:
 
     def test_invalid_channels(self) -> None:
         """Test that invalid number of channels raises ValueError."""
-        arr = np.random.randint(0, 255, (32, 32, 5), dtype=np.uint8)
+        rng = np.random.default_rng(42)
+        arr = rng.integers(0, 255, (32, 32, 5), dtype=np.uint8)
         with pytest.raises(ValueError, match="Unsupported number of channels"):
             vizy._numpy_to_pil_image(arr)  # noqa: SLF001
 
     def test_invalid_dimensions(self) -> None:
         """Test that invalid dimensions raise ValueError."""
-        arr = np.random.randint(0, 255, (32,), dtype=np.uint8)
+        rng = np.random.default_rng(42)
+        arr = rng.integers(0, 255, (32,), dtype=np.uint8)
         with pytest.raises(ValueError, match="Unsupported array dimensions"):
             vizy._numpy_to_pil_image(arr)  # noqa: SLF001
 
@@ -520,13 +555,15 @@ class TestTensorToPilImage:
 
     def test_numpy_array_2d(self) -> None:
         """Test conversion of 2D numpy array."""
-        arr = np.random.rand(32, 32)
+        rng = np.random.default_rng(42)
+        arr = rng.random((32, 32))
         pil_img = vizy._tensor_to_pil_image(arr)  # noqa: SLF001
         assert isinstance(pil_img, Image.Image)
 
     def test_numpy_array_3d(self) -> None:
         """Test conversion of 3D numpy array."""
-        arr = np.random.rand(32, 32, 3)
+        rng = np.random.default_rng(42)
+        arr = rng.random((32, 32, 3))
         pil_img = vizy._tensor_to_pil_image(arr)  # noqa: SLF001
         assert isinstance(pil_img, Image.Image)
         assert pil_img.mode in ["RGB", "L"]
@@ -546,8 +583,9 @@ class TestTensorToPilImage:
 
     def test_list_of_arrays(self) -> None:
         """Test conversion of list of arrays."""
-        arr1 = np.random.rand(32, 32)
-        arr2 = np.random.rand(32, 32)
+        rng = np.random.default_rng(42)
+        arr1 = rng.random((32, 32))
+        arr2 = rng.random((32, 32))
         pil_img = vizy._tensor_to_pil_image([arr1, arr2])  # noqa: SLF001
         assert isinstance(pil_img, Image.Image)
         # Should create a grid, so width should be doubled
@@ -559,7 +597,8 @@ class TestPlot:
 
     def test_plot_numpy_array(self) -> None:
         """Test plotting numpy array."""
-        arr = np.random.rand(32, 32, 3)
+        rng = np.random.default_rng(42)
+        arr = rng.random((32, 32, 3))
         with patch("PIL.Image.Image.show") as mock_show:
             vizy.plot(arr)
         mock_show.assert_called_once()
@@ -580,8 +619,9 @@ class TestPlot:
 
     def test_plot_list_of_arrays(self) -> None:
         """Test plotting list of arrays."""
-        arr1 = np.random.rand(32, 32)
-        arr2 = np.random.rand(32, 32)
+        rng = np.random.default_rng(42)
+        arr1 = rng.random((32, 32))
+        arr2 = rng.random((32, 32))
         with patch("PIL.Image.Image.show") as mock_show:
             vizy.plot([arr1, arr2])
         mock_show.assert_called_once()
@@ -634,9 +674,10 @@ class TestRandomArrays:
 
     def test_random_2d_arrays(self) -> None:
         """Test with random 2D arrays of various sizes."""
+        rng = np.random.default_rng(42)
         for _ in range(10):
-            h, w = np.random.randint(10, 200, 2)
-            arr = np.random.rand(h, w)
+            h, w = rng.integers(10, 200, 2)
+            arr = rng.random((h, w))
 
             # Test that all functions work
             result = vizy._to_plottable_int_arr(arr)  # noqa: SLF001
@@ -649,15 +690,16 @@ class TestRandomArrays:
 
     def test_random_3d_arrays(self) -> None:
         """Test with random 3D arrays."""
+        rng = np.random.default_rng(42)
         for _ in range(10):
-            h, w = np.random.randint(10, 100, 2)
-            c = np.random.choice([1, 3])
+            h, w = rng.integers(10, 100, 2)
+            c = rng.choice([1, 3])
 
             # Test both CHW and HWC formats
-            if np.random.rand() > 0.5:
-                arr = np.random.rand(c, h, w)  # CHW
+            if rng.random() > 0.5:
+                arr = rng.random((c, h, w))  # CHW
             else:
-                arr = np.random.rand(h, w, c)  # HWC
+                arr = rng.random((h, w, c))  # HWC
 
             result = vizy._to_plottable_int_arr(arr)  # noqa: SLF001
             assert result.ndim in [2, 3]
@@ -668,16 +710,17 @@ class TestRandomArrays:
 
     def test_random_4d_arrays(self) -> None:
         """Test with random 4D arrays."""
+        rng = np.random.default_rng(42)
         for _ in range(5):
-            b = np.random.randint(1, 8)
-            c = np.random.choice([1, 3])
-            h, w = np.random.randint(10, 50, 2)
+            b = rng.integers(1, 8)
+            c = rng.choice([1, 3])
+            h, w = rng.integers(10, 50, 2)
 
             # Test both BCHW and CBHW formats
-            if np.random.rand() > 0.5:
-                arr = np.random.rand(b, c, h, w)  # BCHW
+            if rng.random() > 0.5:
+                arr = rng.random((b, c, h, w))  # BCHW
             else:
-                arr = np.random.rand(c, b, h, w)  # CBHW
+                arr = rng.random((c, b, h, w))  # CBHW
 
             try:
                 result = vizy._to_plottable_int_arr(arr)  # noqa: SLF001
@@ -693,26 +736,27 @@ class TestRandomArrays:
 
     def test_random_torch_tensors(self) -> None:
         """Test with random torch tensors."""
+        rng = np.random.default_rng(42)
         for _ in range(5):
             # Generate valid shapes for vizy
-            shape_type = np.random.choice(["2d", "3d", "4d"])
+            shape_type = rng.choice(["2d", "3d", "4d"])
             if shape_type == "2d":
-                shape = tuple(np.random.randint(10, 50, 2))
+                shape = tuple(int(s) for s in rng.integers(10, 50, 2))
             elif shape_type == "3d":
-                h, w = np.random.randint(10, 50, 2)
-                c = np.random.choice([1, 3])
-                if np.random.rand() > 0.5:
-                    shape = (c, h, w)  # CHW
+                h, w = rng.integers(10, 50, 2)
+                c = rng.choice([1, 3])
+                if rng.random() > 0.5:
+                    shape = (int(c), int(h), int(w))  # CHW
                 else:
-                    shape = (h, w, c)  # HWC
+                    shape = (int(h), int(w), int(c))  # HWC
             else:  # 4d
-                b = np.random.randint(1, 4)
-                c = np.random.choice([1, 3])
-                h, w = np.random.randint(10, 30, 2)
-                if np.random.rand() > 0.5:
-                    shape = (b, c, h, w)  # BCHW
+                b = rng.integers(1, 4)
+                c = rng.choice([1, 3])
+                h, w = rng.integers(10, 30, 2)
+                if rng.random() > 0.5:
+                    shape = (int(b), int(c), int(h), int(w))  # BCHW
                 else:
-                    shape = (c, b, h, w)  # CBHW
+                    shape = (int(c), int(b), int(h), int(w))  # CBHW
 
             tensor = torch.rand(*shape)
 
@@ -726,20 +770,21 @@ class TestRandomArrays:
 
     def test_edge_case_shapes(self) -> None:
         """Test edge cases with minimal and maximal shapes."""
+        rng = np.random.default_rng(42)
         # Minimal shapes
-        arr = np.random.rand(2, 2)  # Use 2x2 instead of 1x1 to avoid edge cases
+        arr = rng.random((2, 2))  # Use 2x2 instead of 1x1 to avoid edge cases
         _ = vizy._to_plottable_int_arr(arr)  # noqa: SLF001
         pil_img = vizy._tensor_to_pil_image(arr)  # noqa: SLF001
         assert isinstance(pil_img, Image.Image)
 
         # Single pixel RGB
-        arr = np.random.rand(2, 2, 3)  # Use 2x2 instead of 1x1
+        arr = rng.random((2, 2, 3))  # Use 2x2 instead of 1x1
         _ = vizy._to_plottable_int_arr(arr)  # noqa: SLF001
         pil_img = vizy._tensor_to_pil_image(arr)  # noqa: SLF001
         assert isinstance(pil_img, Image.Image)
 
         # Large batch size
-        arr = np.random.rand(16, 3, 32, 32)
+        arr = rng.random((16, 3, 32, 32))
         _ = vizy._to_plottable_int_arr(arr)  # noqa: SLF001
         pil_img = vizy._tensor_to_pil_image(arr)  # noqa: SLF001
         assert isinstance(pil_img, Image.Image)
@@ -763,9 +808,10 @@ class TestListSupport:
 
     def test_list_of_same_size_2d_arrays(self) -> None:
         """Test processing list of 2D arrays with same dimensions."""
-        arr1 = np.random.randint(0, 255, (32, 32), dtype=np.uint8)
-        arr2 = np.random.randint(0, 255, (32, 32), dtype=np.uint8)
-        arr3 = np.random.randint(0, 255, (32, 32), dtype=np.uint8)
+        rng = np.random.default_rng(42)
+        arr1 = rng.integers(0, 255, (32, 32), dtype=np.uint8)
+        arr2 = rng.integers(0, 255, (32, 32), dtype=np.uint8)
+        arr3 = rng.integers(0, 255, (32, 32), dtype=np.uint8)
 
         array_list = [arr1, arr2, arr3]
         result = vizy._to_numpy(array_list)  # noqa: SLF001
@@ -778,9 +824,10 @@ class TestListSupport:
 
     def test_list_of_different_size_arrays_with_padding(self) -> None:
         """Test that arrays with different sizes get padded correctly."""
-        arr1 = np.random.randint(0, 255, (20, 30), dtype=np.uint8)  # Small
-        arr2 = np.random.randint(0, 255, (40, 50), dtype=np.uint8)  # Large
-        arr3 = np.random.randint(0, 255, (25, 35), dtype=np.uint8)  # Medium
+        rng = np.random.default_rng(42)
+        arr1 = rng.integers(0, 255, (20, 30), dtype=np.uint8)  # Small
+        arr2 = rng.integers(0, 255, (40, 50), dtype=np.uint8)  # Large
+        arr3 = rng.integers(0, 255, (25, 35), dtype=np.uint8)  # Medium
 
         array_list = [arr1, arr2, arr3]
         result = vizy._to_numpy(array_list)  # noqa: SLF001
@@ -799,8 +846,9 @@ class TestListSupport:
 
     def test_list_of_3d_chw_arrays(self) -> None:
         """Test processing list of 3D arrays in CHW format."""
-        rgb1 = np.random.randint(0, 255, (3, 32, 32), dtype=np.uint8)
-        rgb2 = np.random.randint(0, 255, (3, 32, 32), dtype=np.uint8)
+        rng = np.random.default_rng(42)
+        rgb1 = rng.integers(0, 255, (3, 32, 32), dtype=np.uint8)
+        rgb2 = rng.integers(0, 255, (3, 32, 32), dtype=np.uint8)
 
         array_list = [rgb1, rgb2]
         result = vizy._to_numpy(array_list)  # noqa: SLF001
@@ -812,7 +860,8 @@ class TestListSupport:
 
     def test_mixed_tensor_types(self) -> None:
         """Test list containing mix of numpy arrays and torch tensors."""
-        np_arr = np.random.randint(0, 255, (32, 32), dtype=np.uint8)
+        rng = np.random.default_rng(42)
+        np_arr = rng.integers(0, 255, (32, 32), dtype=np.uint8)
         torch_arr = torch.randint(0, 255, (32, 32), dtype=torch.uint8)
 
         mixed_list = [np_arr, torch_arr]
@@ -824,26 +873,28 @@ class TestListSupport:
 
     def test_list_dimension_validation(self) -> None:
         """Test that 4D tensors in lists are rejected."""
+        rng = np.random.default_rng(42)
         # Valid: Same dimension tensors
         valid_list = [
-            np.random.rand(32, 32),  # 2D
-            np.random.rand(32, 32),  # 2D
+            rng.random((32, 32)),  # 2D
+            rng.random((32, 32)),  # 2D
         ]
         result = vizy._to_numpy(valid_list)  # noqa: SLF001
         assert result.ndim == 3  # Should work (B, H, W)
 
         # Invalid: 4D tensor in list
         invalid_list = [
-            np.random.rand(32, 32),  # 2D - OK
-            np.random.rand(2, 3, 32, 32),  # 4D - NOT OK
+            rng.random((32, 32)),  # 2D - OK
+            rng.random((2, 3, 32, 32)),  # 4D - NOT OK
         ]
         with pytest.raises(ValueError, match="Each tensor in list must be 2D or 3D"):
             vizy._to_numpy(invalid_list)  # noqa: SLF001
 
     def test_list_plot_integration(self) -> None:
         """Test that list plotting works end-to-end."""
-        arr1_1 = np.random.randint(0, 255, (32, 32), dtype=np.uint8)
-        arr1_2 = np.random.randint(0, 255, (48, 48), dtype=np.uint8)
+        rng = np.random.default_rng(42)
+        arr1_1 = rng.integers(0, 255, (32, 32), dtype=np.uint8)
+        arr1_2 = rng.integers(0, 255, (48, 48), dtype=np.uint8)
         array1_list = [arr1_1, arr1_2]
 
         # Should work without errors
@@ -852,8 +903,9 @@ class TestListSupport:
 
     def test_list_save_integration(self) -> None:
         """Test that list saving works end-to-end."""
-        arr1 = np.random.randint(0, 255, (32, 32), dtype=np.uint8)
-        arr2 = np.random.randint(0, 255, (32, 32), dtype=np.uint8)
+        rng = np.random.default_rng(42)
+        arr1 = rng.integers(0, 255, (32, 32), dtype=np.uint8)
+        arr2 = rng.integers(0, 255, (32, 32), dtype=np.uint8)
 
         array_list = [arr1, arr2]
 
@@ -870,8 +922,9 @@ class TestListSupport:
 
     def test_list_summary_integration(self) -> None:
         """Test that list summary works correctly."""
-        arr1 = np.random.randint(0, 255, (32, 32), dtype=np.uint8)
-        arr2 = np.random.randint(0, 255, (48, 48), dtype=np.uint8)
+        rng = np.random.default_rng(42)
+        arr1 = rng.integers(0, 255, (32, 32), dtype=np.uint8)
+        arr2 = rng.integers(0, 255, (48, 48), dtype=np.uint8)
 
         array_list = [arr1, arr2]
 
@@ -893,7 +946,8 @@ class TestListSupport:
 
     def test_single_item_list(self) -> None:
         """Test that single-item lists work correctly."""
-        arr = np.random.randint(0, 255, (32, 32), dtype=np.uint8)
+        rng = np.random.default_rng(42)
+        arr = rng.integers(0, 255, (32, 32), dtype=np.uint8)
         single_list = [arr]
 
         result = vizy._to_numpy(single_list)  # noqa: SLF001
