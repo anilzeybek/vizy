@@ -696,10 +696,7 @@ class TestRandomArrays:
             c = rng.choice([1, 3])
 
             # Test both CHW and HWC formats
-            if rng.random() > 0.5:
-                arr = rng.random((c, h, w))  # CHW
-            else:
-                arr = rng.random((h, w, c))  # HWC
+            arr = rng.random((c, h, w)) if rng.random() > 0.5 else rng.random((h, w, c))
 
             result = vizy._to_plottable_int_arr(arr)  # noqa: SLF001
             assert result.ndim in [2, 3]
@@ -717,10 +714,7 @@ class TestRandomArrays:
             h, w = rng.integers(10, 50, 2)
 
             # Test both BCHW and CBHW formats
-            if rng.random() > 0.5:
-                arr = rng.random((b, c, h, w))  # BCHW
-            else:
-                arr = rng.random((c, b, h, w))  # CBHW
+            arr = rng.random((b, c, h, w)) if rng.random() > 0.5 else rng.random((c, b, h, w))
 
             try:
                 result = vizy._to_plottable_int_arr(arr)  # noqa: SLF001
@@ -745,18 +739,12 @@ class TestRandomArrays:
             elif shape_type == "3d":
                 h, w = rng.integers(10, 50, 2)
                 c = rng.choice([1, 3])
-                if rng.random() > 0.5:
-                    shape = (int(c), int(h), int(w))  # CHW
-                else:
-                    shape = (int(h), int(w), int(c))  # HWC
+                shape = (int(c), int(h), int(w)) if rng.random() > 0.5 else (int(h), int(w), int(c))
             else:  # 4d
                 b = rng.integers(1, 4)
                 c = rng.choice([1, 3])
                 h, w = rng.integers(10, 30, 2)
-                if rng.random() > 0.5:
-                    shape = (int(b), int(c), int(h), int(w))  # BCHW
-                else:
-                    shape = (int(c), int(b), int(h), int(w))  # CBHW
+                shape = (int(b), int(c), int(h), int(w)) if rng.random() > 0.5 else (int(c), int(b), int(h), int(w))
 
             tensor = torch.rand(*shape)
 
