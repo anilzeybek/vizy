@@ -57,7 +57,22 @@ dev = [
 [tool.ruff]
 line-length = 120
 lint.select = ["ALL"]
-lint.ignore = ["COM812", "EM101", "EM102", "D100", "TRY003", "S101", "TC006", "PLR2004", "T201", "D203", "D213"]
+lint.ignore = [
+    "COM812",
+    "EM101",
+    "EM102",
+    "D100",
+    "TRY003",
+    "S101",
+    "TC006",
+    "PLR2004",
+    "T201",
+    "D103",
+    "D104",
+    "D203",
+    "D213",
+    "RET504"
+]
 
 [tool.basedpyright]
 typeCheckingMode = "standard"
