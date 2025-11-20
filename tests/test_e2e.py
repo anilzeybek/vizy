@@ -470,7 +470,7 @@ def test_summary() -> None:
 def test_ambiguous_33hw_bchw() -> None:
     """Test ambiguous (3, 3, H, W) tensor that should be detected as BCHW (3 RGB images)."""
     # Create 3 distinct RGB-like images with correlated channels
-    rng = np.random.default_rng(42)  # For reproducible test
+    rng = np.random.default_rng(42)
     base_img = rng.integers(0, 255, (32, 32), dtype=np.uint8)
 
     # Create RGB versions with correlated channels
