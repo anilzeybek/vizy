@@ -27,6 +27,10 @@ You can just do:
 vizy.plot(tensor)
 ```
 
+**Example output:**
+
+![Example notebook showing vizy.plot() with different tensor formats](assets/example.png)
+
 Or if you are in an ssh session, you can just do:
 
 ```python

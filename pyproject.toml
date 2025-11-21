@@ -37,11 +37,13 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 exclude = [
     "tests/data/",
+    "assets/",
 ]
 
 [tool.hatch.build.targets.sdist]
 exclude = [
     "tests/data/",
+    "assets/",
 ]
 
 [dependency-groups]
