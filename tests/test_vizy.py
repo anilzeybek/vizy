@@ -1,6 +1,7 @@
+import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -625,6 +626,51 @@ class TestPlot:
         with patch("PIL.Image.Image.show") as mock_show:
             vizy.plot([arr1, arr2])
         mock_show.assert_called_once()
+
+    def test_plot_jupyter_inline_display(self) -> None:
+        """Test that plot uses IPython.display.display in Jupyter notebooks."""
+        rng = np.random.default_rng(42)
+        arr = rng.random((32, 32, 3))
+
+        # Mock sys.modules to simulate Jupyter environment
+        original_modules = sys.modules.copy()
+        sys.modules["ipykernel"] = MagicMock()
+
+        try:
+            # Patch display - it's imported inside the function, so patch at the source
+            with patch("IPython.display.display") as mock_display, patch(
+                "PIL.Image.Image.show"
+            ) as mock_show:
+                vizy.plot(arr)
+                # In Jupyter, display should be called
+                mock_display.assert_called_once()
+                # show should NOT be called
+                mock_show.assert_not_called()
+        finally:
+            # Restore original modules
+            if "ipykernel" in sys.modules:
+                del sys.modules["ipykernel"]
+            sys.modules.update(original_modules)
+
+    def test_plot_falls_back_to_show_when_not_jupyter(self) -> None:
+        """Test that plot falls back to show() when not in Jupyter environment."""
+        rng = np.random.default_rng(42)
+        arr = rng.random((32, 32, 3))
+
+        # Ensure ipykernel is not in sys.modules to simulate non-Jupyter environment
+        original_modules = sys.modules.copy()
+        ipykernel_backup = sys.modules.pop("ipykernel", None)
+
+        try:
+            with patch("PIL.Image.Image.show") as mock_show:
+                vizy.plot(arr)
+                # When not in Jupyter, show should be called
+                mock_show.assert_called_once()
+        finally:
+            # Restore original modules
+            if ipykernel_backup is not None:
+                sys.modules["ipykernel"] = ipykernel_backup
+            sys.modules.update(original_modules)
 
 
 class TestPILSupport:

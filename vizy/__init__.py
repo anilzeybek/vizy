@@ -308,6 +308,8 @@ def _tensor_to_pil_image(tensor: TensorLike | Sequence[TensorLike]) -> Image.Ima
 def plot(tensor: TensorLike | Sequence[TensorLike]) -> None:
     """Display *tensor* using PIL/Pillow (opens system image viewer).
 
+    In Jupyter notebooks, displays inline. Otherwise, opens system image viewer.
+
     Parameters
     ----------
     tensor : torch.Tensor | np.ndarray | PIL.Image | sequence of these
@@ -317,6 +319,20 @@ def plot(tensor: TensorLike | Sequence[TensorLike]) -> None:
 
     """
     pil_image = _tensor_to_pil_image(tensor)
+
+    # Check if we're in a Jupyter notebook environment
+    try:
+        import sys
+
+        from IPython.display import display
+
+        if "ipykernel" in sys.modules:
+            display(pil_image)
+            return
+    except ImportError:
+        pass
+
+    # Fall back to system image viewer
     pil_image.show()
 
 
