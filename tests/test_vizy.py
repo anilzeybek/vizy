@@ -325,6 +325,13 @@ class TestForceNpArrToIntArr:
         # Normalized 50.0: (50.0 - (-0.3)) / 200.3 * 255 ≈ 64
         assert result[1] == 64  # Approximately 64 after normalization and rounding
 
+    def test_bool_array(self) -> None:
+        """Test that bool arrays are converted to uint8."""
+        arr = np.array([True, False, True], dtype=bool)
+        result = vizy._force_np_arr_to_int_arr(arr)  # noqa: SLF001
+        assert result.dtype == np.uint8
+        assert np.array_equal(result, np.array([1, 0, 1], dtype=np.uint8))
+
 
 class TestPrepareForDisplay:
     """Test the _prepare_for_display function."""
@@ -638,9 +645,7 @@ class TestPlot:
 
         try:
             # Patch display - it's imported inside the function, so patch at the source
-            with patch("IPython.display.display") as mock_display, patch(
-                "PIL.Image.Image.show"
-            ) as mock_show:
+            with patch("IPython.display.display") as mock_display, patch("PIL.Image.Image.show") as mock_show:
                 vizy.plot(arr)
                 # In Jupyter, display should be called
                 mock_display.assert_called_once()

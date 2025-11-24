@@ -92,6 +92,18 @@ def test_hw() -> None:
         Path(saved_image_path).unlink()
 
 
+def test_hw_bool_array() -> None:
+    binary_mask = torch.zeros((256, 256), dtype=torch.bool)
+    binary_mask[100:150, 100:150] = True
+    saved_image_path = vizy.save(binary_mask)
+    try:
+        assert images_look_same(saved_image_path, "tests/data/output/binary_mask.png"), (
+            "The saved image does not match the target."
+        )
+    finally:
+        Path(saved_image_path).unlink()
+
+
 ########################
 #### 3D array tests ####
 ########################
@@ -826,9 +838,5 @@ def test_bchw_two_fullhd_grayscale_side_by_side() -> None:
         Path(saved_path).unlink()
 
 
-def main() -> None:
-    test_hwc()
-
-
 if __name__ == "__main__":
-    main()
+    pytest.main([__file__])
