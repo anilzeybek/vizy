@@ -1,6 +1,6 @@
 [project]
 name = "vizy"
-version = "1.3.0"
+version = "1.3.1"
 description = "Tiny tensor visualiser: vz.plot(t) / vz.save(t)"
 authors = [{name = "Anıl Zeybek"}]
 readme = "README.md"
