@@ -259,11 +259,15 @@ def _convert_float_to_uint8(numpy_arr: NDArray[np.number]) -> NDArray[np.uint8]:
 def _force_np_arr_to_int_arr(numpy_arr: NDArray[np.number]) -> NDArray[np.uint8]:
     """Force numpy array to uint8."""
     if numpy_arr.dtype == np.uint8:
+        if np.max(numpy_arr) <= 1:
+            numpy_arr *= 255
         return cast(NDArray[np.uint8], numpy_arr)
     if numpy_arr.dtype.kind == "f":  # float type
         return _convert_float_to_uint8(numpy_arr)
     if numpy_arr.dtype.kind in ("i", "u"):  # signed or unsigned integer
         # Convert other integer types to uint8 with clipping
+        if np.max(numpy_arr) <= 1:
+            numpy_arr *= 255
         return np.clip(numpy_arr, 0, 255).astype(np.uint8)
     if numpy_arr.dtype.kind == "b":  # boolean
         return numpy_arr.astype(np.uint8) * 255

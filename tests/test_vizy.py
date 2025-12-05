@@ -330,7 +330,61 @@ class TestForceNpArrToIntArr:
         arr = np.array([True, False, True], dtype=bool)
         result = vizy._force_np_arr_to_int_arr(arr)  # noqa: SLF001
         assert result.dtype == np.uint8
-        assert np.array_equal(result, np.array([1, 0, 1], dtype=np.uint8))
+        assert np.array_equal(result, np.array([255, 0, 255], dtype=np.uint8))
+
+    def test_uint8_binary_scaled_to_255(self) -> None:
+        """Test that uint8 arrays with only 0 and 1 values are scaled to 0-255."""
+        arr = np.array([0, 1, 1, 0], dtype=np.uint8)
+        result = vizy._force_np_arr_to_int_arr(arr)  # noqa: SLF001
+        assert result.dtype == np.uint8
+        assert np.array_equal(result, np.array([0, 255, 255, 0], dtype=np.uint8))
+
+    def test_uint8_binary_2d_image(self) -> None:
+        """Test that 2D uint8 binary images are scaled correctly."""
+        arr = np.array([[0, 1], [1, 0]], dtype=np.uint8)
+        result = vizy._force_np_arr_to_int_arr(arr)  # noqa: SLF001
+        expected = np.array([[0, 255], [255, 0]], dtype=np.uint8)
+        assert np.array_equal(result, expected)
+
+    def test_uint8_all_zeros(self) -> None:
+        """Test that uint8 array with all zeros remains unchanged."""
+        arr = np.array([0, 0, 0], dtype=np.uint8)
+        result = vizy._force_np_arr_to_int_arr(arr)  # noqa: SLF001
+        assert np.array_equal(result, arr)
+
+    def test_uint8_all_ones(self) -> None:
+        """Test that uint8 array with all ones is scaled to 255."""
+        arr = np.array([1, 1, 1], dtype=np.uint8)
+        result = vizy._force_np_arr_to_int_arr(arr)  # noqa: SLF001
+        expected = np.array([255, 255, 255], dtype=np.uint8)
+        assert np.array_equal(result, expected)
+
+    def test_uint8_normal_range_unchanged(self) -> None:
+        """Test that uint8 arrays with values > 1 remain unchanged."""
+        arr = np.array([0, 50, 128, 255], dtype=np.uint8)
+        result = vizy._force_np_arr_to_int_arr(arr)  # noqa: SLF001
+        assert np.array_equal(result, arr)
+
+    def test_int32_binary_scaled_to_255(self) -> None:
+        """Test that int32 arrays with only 0 and 1 values are scaled to 0-255."""
+        arr = np.array([0, 1, 1, 0], dtype=np.int32)
+        result = vizy._force_np_arr_to_int_arr(arr)  # noqa: SLF001
+        assert result.dtype == np.uint8
+        assert np.array_equal(result, np.array([0, 255, 255, 0], dtype=np.uint8))
+
+    def test_int64_binary_scaled_to_255(self) -> None:
+        """Test that int64 arrays with only 0 and 1 values are scaled to 0-255."""
+        arr = np.array([0, 1, 0, 1], dtype=np.int64)
+        result = vizy._force_np_arr_to_int_arr(arr)  # noqa: SLF001
+        assert result.dtype == np.uint8
+        assert np.array_equal(result, np.array([0, 255, 0, 255], dtype=np.uint8))
+
+    def test_int32_normal_range_unchanged(self) -> None:
+        """Test that int32 arrays with values > 1 are clipped without scaling."""
+        arr = np.array([0, 50, 128, 255], dtype=np.int32)
+        result = vizy._force_np_arr_to_int_arr(arr)  # noqa: SLF001
+        assert result.dtype == np.uint8
+        assert np.array_equal(result, np.array([0, 50, 128, 255], dtype=np.uint8))
 
 
 class TestPrepareForDisplay:
