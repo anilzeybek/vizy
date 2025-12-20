@@ -15,6 +15,8 @@ For ndarray/tensors of 2-D or 3-D we transpose to (H, W, C) format.
 Supports torch.Tensor, numpy.ndarray, PIL.Image inputs, and lists/sequences of these types.
 """
 
+from __future__ import annotations
+
 import math
 import os
 import tempfile
@@ -39,10 +41,10 @@ __version__: str = "0.2.0"
 if TYPE_CHECKING:
     import torch as _torch_mod
 
-    type _TorchTensor = _torch_mod.Tensor
+    _TorchTensor = _torch_mod.Tensor
 else:
-    type _TorchTensor = np.ndarray
-type TensorLike = _TorchTensor | Image.Image | NDArray[np.number]
+    _TorchTensor = np.ndarray
+TensorLike = _TorchTensor | Image.Image | NDArray[np.number]
 
 
 def _is_sequence_of_tensors(x: TensorLike | Sequence[TensorLike]) -> bool:
