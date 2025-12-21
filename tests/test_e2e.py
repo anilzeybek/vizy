@@ -1,6 +1,8 @@
 from pathlib import Path
 
 import imagehash
+import jax
+import jax.numpy as jnp
 import numpy as np
 import pytest
 import torch
@@ -104,6 +106,17 @@ def test_hw_bool_array() -> None:
         Path(saved_image_path).unlink()
 
 
+def test_hw_jax_array() -> None:
+    image = jnp.array(get_test_image0()[..., 0])  # (H, W)
+    saved_image_path = vizy.save(image)
+    try:
+        assert images_look_same(saved_image_path, get_test_image0_grayscale_path()), (
+            "The saved image does not match the target."
+        )
+    finally:
+        Path(saved_image_path).unlink()
+
+
 ########################
 #### 3D array tests ####
 ########################
@@ -120,6 +133,24 @@ def test_hwc() -> None:
 
 def test_chw() -> None:
     image = get_test_image0().transpose(2, 0, 1)  # (C, H, W)
+    saved_image_path = vizy.save(image)
+    try:
+        assert images_look_same(saved_image_path, get_test_image0_path()), "The saved image does not match the target."
+    finally:
+        Path(saved_image_path).unlink()
+
+
+def test_hwc_jax() -> None:
+    image = jnp.array(get_test_image0())  # (H, W, C)
+    saved_image_path = vizy.save(image)
+    try:
+        assert images_look_same(saved_image_path, get_test_image0_path()), "The saved image does not match the target."
+    finally:
+        Path(saved_image_path).unlink()
+
+
+def test_chw_jax() -> None:
+    image = jnp.array(get_test_image0().transpose(2, 0, 1))  # (C, H, W)
     saved_image_path = vizy.save(image)
     try:
         assert images_look_same(saved_image_path, get_test_image0_path()), "The saved image does not match the target."
@@ -229,6 +260,25 @@ def test_2chw_torch() -> None:
     # Resize image1 to match image0's height and width.
     image1 = torch.nn.functional.interpolate(image1, size=(image0.shape[2], image0.shape[3]), mode="bilinear")
     image = torch.cat([image0, image1], dim=0)  # (B=2, C, H, W)
+
+    saved_image_path = vizy.save(image)
+    try:
+        assert images_look_same(saved_image_path, "tests/data/output/image0-image1.png"), (
+            "The saved image does not match the target."
+        )
+    finally:
+        Path(saved_image_path).unlink()
+
+
+def test_2chw_jax() -> None:
+    image0 = jnp.array(get_test_image0().transpose(2, 0, 1))[None, ...]
+    image1 = jnp.array(get_test_image1().transpose(2, 0, 1))[None, ...]
+
+    # Resize image1 using jax.image.resize
+    image1 = jax.image.resize(
+        image1, (image1.shape[0], image1.shape[1], image0.shape[2], image0.shape[3]), method="bilinear"
+    )
+    image = jnp.concatenate([image0, image1], axis=0)  # (B=2, C, H, W)
 
     saved_image_path = vizy.save(image)
     try:
@@ -466,6 +516,9 @@ def test_summary() -> None:
 
     pil_image = Image.fromarray(image)
     vizy.summary(pil_image)
+
+    jax_image = jnp.array(image)
+    vizy.summary(jax_image)
 
     # Test with list of tensors
     image_list = [image, image + 10]

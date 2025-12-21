@@ -3,6 +3,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import jax.numpy as jnp
 import numpy as np
 import pytest
 import torch
@@ -473,6 +474,20 @@ class TestSave:
             if Path(result_path).exists():
                 Path(result_path).unlink()
 
+    def test_save_jax_array(self) -> None:
+        """Test saving jax array."""
+        array = jnp.zeros((50, 60, 3))
+
+        with patch("builtins.print") as mock_print:
+            result_path = vizy.save(array)
+
+        try:
+            assert Path(result_path).exists()
+            mock_print.assert_called_once_with(result_path)
+        finally:
+            if Path(result_path).exists():
+                Path(result_path).unlink()
+
     def test_save_with_kwargs(self) -> None:
         """Test saving with additional kwargs."""
         rng = np.random.default_rng(42)
@@ -519,6 +534,19 @@ class TestSummary:
         assert any("Shape: (50, 60, 3)" in call for call in calls)
         assert any("float32" in call for call in calls)
         assert any("device:" in call for call in calls)
+
+    def test_summary_jax_array(self) -> None:
+        """Test summary for jax array."""
+        array = jnp.zeros((50, 60, 3))
+
+        with patch("builtins.print") as mock_print:
+            vizy.summary(array)
+
+        calls = [call.args[0] for call in mock_print.call_args_list]
+        assert any("jax.Array" in call or "DeviceArray" in call for call in calls)
+        assert any("Shape: (50, 60, 3)" in call for call in calls)
+        assert any("float32" in call for call in calls)
+        assert any("devices:" in call for call in calls)
 
     def test_summary_torch_tensor_with_device(self) -> None:
         """Test summary for torch tensor with device info."""
@@ -670,6 +698,13 @@ class TestPlot:
         tensor = torch.rand(3, 32, 32)
         with patch("PIL.Image.Image.show") as mock_show:
             vizy.plot(tensor)
+        mock_show.assert_called_once()
+
+    def test_plot_jax_array(self) -> None:
+        """Test plotting jax array."""
+        array = jnp.zeros((3, 32, 32))
+        with patch("PIL.Image.Image.show") as mock_show:
+            vizy.plot(array)
         mock_show.assert_called_once()
 
     def test_plot_pil_image(self) -> None:
@@ -861,6 +896,34 @@ class TestRandomArrays:
                 # Some random shapes might not be valid, which is expected
                 pass
 
+    def test_random_jax_arrays(self) -> None:
+        """Test with random jax arrays."""
+        rng = np.random.default_rng(42)
+        for _ in range(5):
+            # Generate valid shapes for vizy
+            shape_type = rng.choice(["2d", "3d", "4d"])
+            if shape_type == "2d":
+                shape = tuple(int(s) for s in rng.integers(10, 50, 2))
+            elif shape_type == "3d":
+                h, w = rng.integers(10, 50, 2)
+                c = rng.choice([1, 3])
+                shape = (int(c), int(h), int(w)) if rng.random() > 0.5 else (int(h), int(w), int(c))
+            else:  # 4d
+                b = rng.integers(1, 4)
+                c = rng.choice([1, 3])
+                h, w = rng.integers(10, 30, 2)
+                shape = (int(b), int(c), int(h), int(w)) if rng.random() > 0.5 else (int(c), int(b), int(h), int(w))
+
+            array = jnp.array(rng.random(shape))
+
+            try:
+                # Test conversion to PIL image
+                pil_img = vizy._tensor_to_pil_image(array)  # noqa: SLF001
+                assert isinstance(pil_img, Image.Image)
+            except (ValueError, TypeError):
+                # Some random shapes might not be valid, which is expected
+                pass
+
     def test_edge_case_shapes(self) -> None:
         """Test edge cases with minimal and maximal shapes."""
         rng = np.random.default_rng(42)
@@ -956,13 +1019,16 @@ class TestListSupport:
         rng = np.random.default_rng(42)
         np_arr = rng.integers(0, 255, (32, 32), dtype=np.uint8)
         torch_arr = torch.randint(0, 255, (32, 32), dtype=torch.uint8)
+        jax_arr = jnp.zeros((32, 32), dtype=jnp.uint8)
 
-        mixed_list = [np_arr, torch_arr]
+        mixed_list = [np_arr, torch_arr, jax_arr]
+
         result = vizy._to_numpy(mixed_list)  # noqa: SLF001
 
-        assert result.shape == (2, 32, 32)
+        assert result.shape == (3, 32, 32)
         assert np.array_equal(result[0], np_arr)
         assert np.array_equal(result[1], torch_arr.numpy())
+        assert np.array_equal(result[2], np.asarray(jax_arr))
 
     def test_list_dimension_validation(self) -> None:
         """Test that 4D tensors in lists are rejected."""

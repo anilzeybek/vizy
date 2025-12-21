@@ -34,17 +34,25 @@ try:
 except ModuleNotFoundError:
     torch = None
 
+try:
+    import jax
+except ModuleNotFoundError:
+    jax = None
+
 
 __all__: Sequence[str] = ("plot", "save", "summary")
 __version__: str = "0.2.0"
 
 if TYPE_CHECKING:
+    import jax as _jax_mod
     import torch as _torch_mod
 
     _TorchTensor = _torch_mod.Tensor
+    _JaxArray = _jax_mod.Array
 else:
     _TorchTensor = np.ndarray
-TensorLike = _TorchTensor | Image.Image | NDArray[np.number]
+    _JaxArray = np.ndarray
+TensorLike = _TorchTensor | _JaxArray | Image.Image | NDArray[np.number]
 
 
 def _is_sequence_of_tensors(x: TensorLike | Sequence[TensorLike]) -> bool:
@@ -56,10 +64,11 @@ def _is_sequence_of_tensors(x: TensorLike | Sequence[TensorLike]) -> bool:
 
     # Check if all elements are valid tensor types
     for item in x:
-        is_tensor = torch is not None and isinstance(item, torch.Tensor)
+        is_torch = torch is not None and isinstance(item, torch.Tensor)
+        is_jax = jax is not None and isinstance(item, jax.Array)
         is_array = isinstance(item, np.ndarray)
         is_pil = isinstance(item, Image.Image)
-        if not (is_tensor or is_array or is_pil):
+        if not (is_torch or is_jax or is_array or is_pil):
             return False
     return True
 
@@ -104,19 +113,25 @@ def _pad_to_common_size(numpy_arrays: list[NDArray[np.number]]) -> list[NDArray[
     return padded_arrays
 
 
+def _single_to_numpy(x: TensorLike) -> NDArray[np.number]:
+    """Convert a single TensorLike item to a numpy array."""
+    if torch is not None and isinstance(x, torch.Tensor):
+        return x.detach().cpu().numpy()
+    if jax is not None and isinstance(x, jax.Array):
+        return np.asarray(x)
+    if isinstance(x, Image.Image):
+        return np.array(x)
+    if isinstance(x, np.ndarray):
+        return x
+    raise TypeError(f"Unsupported type: {type(x)}, expected torch.Tensor | jax.Array | np.ndarray | PIL.Image")
+
+
 def _to_numpy(x: TensorLike | Sequence[TensorLike]) -> NDArray[np.number]:
     if _is_sequence_of_tensors(x):
         assert isinstance(x, Sequence)
         numpy_arrays: list[NDArray[np.number]] = []
         for item in x:
-            if torch is not None and isinstance(item, torch.Tensor):
-                arr = item.detach().cpu().numpy()
-            elif isinstance(item, Image.Image):
-                arr = np.array(item)
-            elif isinstance(item, np.ndarray):
-                arr = item
-            else:
-                raise TypeError(f"Unsupported type in sequence: {type(item)}")
+            arr = _single_to_numpy(item).squeeze()
 
             # Validate that each tensor is 2D or 3D (no batches in the list)
             arr = arr.squeeze()
@@ -130,19 +145,7 @@ def _to_numpy(x: TensorLike | Sequence[TensorLike]) -> NDArray[np.number]:
         numpy_arrays = _pad_to_common_size(numpy_arrays)
         return np.stack(numpy_arrays, axis=0)  # Creates (B, ...) format
 
-    # Handle single tensor/array/image
-    if torch is not None and isinstance(x, torch.Tensor):
-        np_arr = x.detach().cpu().numpy()
-    elif isinstance(x, Image.Image):
-        np_arr = np.array(x)
-    elif isinstance(x, np.ndarray):
-        np_arr = x
-    else:
-        raise TypeError(
-            f"Unsupported type: {type(x)}, expected torch.Tensor | np.ndarray | PIL.Image | sequence of these types"
-        )
-
-    return np_arr
+    return _single_to_numpy(cast(TensorLike, x))
 
 
 def _normalize_3d_array(numpy_arr: NDArray[np.number]) -> tuple[NDArray[np.number], bool]:
@@ -320,7 +323,7 @@ def plot(tensor: TensorLike | Sequence[TensorLike]) -> None:
 
     Parameters
     ----------
-    tensor : torch.Tensor | np.ndarray | PIL.Image | sequence of these
+    tensor : torch.Tensor | jax.Array | np.ndarray | PIL.Image | sequence of these
         Image tensor of shape (*, H, W) or (*, C, H, W), PIL Image, or a
         list/tuple of 2D/3D tensors. For lists with mismatched dimensions,
         images will be padded to the largest size.
@@ -359,7 +362,7 @@ def save(
     ----------
     path_or_tensor :
         Destination path or tensor (if path omitted).
-    tensor : torch.Tensor | np.ndarray | PIL.Image | sequence of these | None
+    tensor : torch.Tensor | jax.Array | np.ndarray | PIL.Image | sequence of these | None
         Tensor to save, or None if tensor is first positional argument.
         For lists with mismatched dimensions, images will be padded to the largest size.
 
@@ -393,6 +396,12 @@ def _get_tensor_info(item: TensorLike) -> tuple[str, str, NDArray[np.number], st
         item_type = "torch.Tensor"
         device_info = f" (device: {item.device})" if hasattr(item, "device") else ""
         arr = item.detach().cpu().numpy()
+        dtype_str = str(item.dtype)
+        return item_type, device_info, arr, dtype_str
+    if jax is not None and isinstance(item, jax.Array):
+        item_type = "jax.Array"
+        device_info = f" (devices: {item.devices()})" if hasattr(item, "devices") else ""
+        arr = np.asarray(item)
         dtype_str = str(item.dtype)
         return item_type, device_info, arr, dtype_str
     if isinstance(item, Image.Image):
@@ -447,7 +456,7 @@ def _summary_single(tensor: TensorLike) -> None:
     """Print summary for a single tensor."""
     info = _get_tensor_info(tensor)
     if info is None:
-        raise TypeError("Expected torch.Tensor | np.ndarray | PIL.Image | sequence of these")
+        raise TypeError("Expected torch.Tensor | jax.Array | np.ndarray | PIL.Image | sequence of these")
     array_type, device_info, arr, dtype_str = info
 
     print(f"Type: {array_type}{device_info}")
@@ -469,7 +478,7 @@ def summary(tensor: TensorLike | Sequence[TensorLike]) -> None:
 
     Parameters
     ----------
-    tensor : torch.Tensor | np.ndarray | PIL.Image | sequence of these
+    tensor : torch.Tensor | jax.Array | np.ndarray | PIL.Image | sequence of these
         Tensor, array, PIL Image, or list/tuple of these to summarize.
 
     """
