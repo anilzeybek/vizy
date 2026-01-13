@@ -670,7 +670,7 @@ def test_float_range_edge_cases() -> None:
     # Test array with some NaN values (should raise ValueError)
     image_with_nan = rng.random((h, w, 3), dtype=np.float32)
     image_with_nan[0, 0, 0] = np.nan
-    with pytest.raises(ValueError, match="Cannot plot array with NaN values"):
+    with pytest.raises(ValueError, match="Cannot plot array with NaN or infinity values"):
         vizy.save(image_with_nan)
 
 

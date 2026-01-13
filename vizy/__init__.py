@@ -41,7 +41,7 @@ except ModuleNotFoundError:
 
 
 __all__: Sequence[str] = ("plot", "save", "summary")
-__version__: str = "0.2.0"
+__version__: str = "1.4.0"
 
 if TYPE_CHECKING:
     import jax as _jax_mod
@@ -99,7 +99,6 @@ def _pad_to_common_size(numpy_arrays: list[NDArray[np.number]]) -> list[NDArray[
         pad_h = max_h - h
         pad_w = max_w - w
 
-        padded_arr: NDArray[np.number] | None = None
         if arr.ndim == 2:
             padded_arr = np.pad(arr, ((0, pad_h), (0, pad_w)), mode="constant", constant_values=0)
         elif arr.ndim == 3:
@@ -107,8 +106,9 @@ def _pad_to_common_size(numpy_arrays: list[NDArray[np.number]]) -> list[NDArray[
                 padded_arr = np.pad(arr, ((0, 0), (0, pad_h), (0, pad_w)), mode="constant", constant_values=0)
             else:  # HWC format
                 padded_arr = np.pad(arr, ((0, pad_h), (0, pad_w), (0, 0)), mode="constant", constant_values=0)
+        else:
+            raise ValueError(f"Expected 2D or 3D array for padding, got {arr.ndim}D")
 
-        assert padded_arr is not None
         padded_arrays.append(padded_arr)
     return padded_arrays
 
@@ -128,13 +128,12 @@ def _single_to_numpy(x: TensorLike) -> NDArray[np.number]:
 
 def _to_numpy(x: TensorLike | Sequence[TensorLike]) -> NDArray[np.number]:
     if _is_sequence_of_tensors(x):
-        assert isinstance(x, Sequence)
+        x = cast(Sequence[TensorLike], x)
         numpy_arrays: list[NDArray[np.number]] = []
         for item in x:
             arr = _single_to_numpy(item).squeeze()
 
             # Validate that each tensor is 2D or 3D (no batches in the list)
-            arr = arr.squeeze()
             if arr.ndim not in (2, 3):
                 raise ValueError(
                     f"Each tensor in list must be 2D or 3D after squeezing, got {arr.ndim}D with shape {arr.shape}"
@@ -265,14 +264,14 @@ def _force_np_arr_to_int_arr(numpy_arr: NDArray[np.number]) -> NDArray[np.uint8]
     """Force numpy array to uint8."""
     if numpy_arr.dtype == np.uint8:
         if np.max(numpy_arr) <= 1:
-            numpy_arr *= 255
+            numpy_arr = numpy_arr * 255
         return cast(NDArray[np.uint8], numpy_arr)
     if numpy_arr.dtype.kind == "f":  # float type
         return _convert_float_to_uint8(numpy_arr)
     if numpy_arr.dtype.kind in ("i", "u"):  # signed or unsigned integer
         # Convert other integer types to uint8 with clipping
         if np.max(numpy_arr) <= 1:
-            numpy_arr *= 255
+            numpy_arr = numpy_arr * 255
         return np.clip(numpy_arr, 0, 255).astype(np.uint8)
     if numpy_arr.dtype.kind == "b":  # boolean
         return numpy_arr.astype(np.uint8) * 255
@@ -310,8 +309,8 @@ def _numpy_to_pil_image(numpy_arr: NDArray[np.uint8]) -> Image.Image:
 
 def _tensor_to_pil_image(tensor: TensorLike | Sequence[TensorLike]) -> Image.Image:
     numpy_arr = _to_numpy(tensor)
-    if np.any(np.isnan(numpy_arr)):
-        raise ValueError("Cannot plot array with NaN values")
+    if not np.all(np.isfinite(numpy_arr)):
+        raise ValueError("Cannot plot array with NaN or infinity values")
     plottable_numpy_arr = _to_plottable_int_arr(numpy_arr)
     return _numpy_to_pil_image(plottable_numpy_arr)
 
@@ -373,10 +372,12 @@ def save(
 
     """
     if tensor is None:
-        assert not isinstance(path_or_tensor, str)
+        if isinstance(path_or_tensor, str):
+            raise TypeError("tensor argument is required when first argument is a path string")
         tensor, path = path_or_tensor, None
     else:
-        assert isinstance(path_or_tensor, str)
+        if not isinstance(path_or_tensor, str):
+            raise TypeError("first argument must be a path string when tensor argument is provided")
         path = path_or_tensor
 
     if path is None:
@@ -483,7 +484,6 @@ def summary(tensor: TensorLike | Sequence[TensorLike]) -> None:
 
     """
     if _is_sequence_of_tensors(tensor):
-        assert isinstance(tensor, Sequence)
-        _summary_sequence(tensor)
+        _summary_sequence(cast(Sequence[TensorLike], tensor))
     else:
         _summary_single(cast(TensorLike, tensor))

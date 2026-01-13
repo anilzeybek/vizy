@@ -3,6 +3,27 @@ import enum
 import numpy as np
 from numpy.typing import NDArray
 
+# Constants for format detection heuristics
+EPSILON = 1e-8  # Small value to prevent division by zero
+ASPECT_RATIO_BATCH_THRESHOLD = 10  # Aspect ratios above this suggest batch of images
+CORRELATION_HIGH_THRESHOLD = 0.6  # High correlation threshold for RGB detection
+CORRELATION_VERY_HIGH_THRESHOLD = 0.95  # Very high correlation (might be similar noise)
+CORRELATION_LOW_THRESHOLD = 0.05  # Very low correlation suggests separate images
+CORRELATION_MODERATE_THRESHOLD = 0.3  # Moderate correlation threshold
+RANGE_VARIABILITY_LOW = 0.2  # Low range variability suggests RGB
+RANGE_VARIABILITY_MODERATE = 0.4  # Moderate range variability
+COEFFICIENT_VARIATION_LOW = 0.3  # Low coefficient of variation
+COEFFICIENT_VARIATION_HIGH = 1.0  # High coefficient of variation
+HISTOGRAM_DIFF_THRESHOLD = 0.1  # Histogram difference threshold for batch detection
+HISTOGRAM_SIMILARITY_THRESHOLD = 0.8  # Histogram similarity threshold for CBHW detection
+CHANNEL_DISTINCTIVENESS_THRESHOLD = 0.1  # Channel max/min distinctiveness threshold
+CBHW_CORRELATION_VERY_HIGH = 0.98  # Very high CBHW correlation threshold
+CORR_DIFF_VERY_STRONG = 0.5  # Very strong correlation difference
+CORR_DIFF_STRONG = 0.2  # Strong correlation difference
+CORR_DIFF_MODERATE = 0.05  # Moderate correlation difference
+RGB_SCORE_THRESHOLD = 2.0  # Score threshold to classify as RGB
+STD_RATIO_THRESHOLD = 0.5  # Threshold for standard deviation ratio comparison
+
 
 class Array3DFormat(enum.Enum):
     """Enum representing possible formats for 3D numpy arrays."""
@@ -55,8 +76,10 @@ def detect_3d_array_format(arr: NDArray[np.number]) -> Array3DFormat:
 
 def _check_aspect_ratio(h: int, w: int) -> str | None:
     """Heuristic 1: Extreme aspect ratios suggest batch of separate images."""
+    if h == 0 or w == 0:
+        return None
     aspect_ratio = max(h, w) / min(h, w)
-    if aspect_ratio > 10:  # Very elongated suggests batch
+    if aspect_ratio > ASPECT_RATIO_BATCH_THRESHOLD:  # Very elongated suggests batch
         return "batch"
     return None
 
@@ -81,16 +104,16 @@ def _check_channel_correlation(arr: NDArray[np.number]) -> float:
 
         avg_correlation = np.mean(np.abs(correlations))
         # Strong correlation suggests RGB
-        if avg_correlation > 0.6:
+        if avg_correlation > CORRELATION_HIGH_THRESHOLD:
             # But check if correlation is TOO high (might be similar noise patterns)
-            if avg_correlation > 0.95:
+            if avg_correlation > CORRELATION_VERY_HIGH_THRESHOLD:
                 # Very high correlation - might be batch with similar base patterns
                 return 1.0  # Less confident
             return 2.0  # More confident
-        if avg_correlation > 0.3:
+        if avg_correlation > CORRELATION_MODERATE_THRESHOLD:
             return 1.0
         # Very low correlation suggests separate images
-        if avg_correlation < 0.05:
+        if avg_correlation < CORRELATION_LOW_THRESHOLD:
             return -2.0
     except (np.linalg.LinAlgError, ValueError):
         pass  # Correlation failed, continue with other heuristics
@@ -101,13 +124,13 @@ def _check_value_range_similarity(arr: NDArray[np.number]) -> float:
     """Heuristic 3: Value range similarity. Returns RGB score contribution."""
     ranges = [arr[i].max() - arr[i].min() for i in range(3)]
     mean_range = np.mean(ranges)
-    if mean_range > 0:
-        range_variability = np.std(ranges) / mean_range
-        # Very similar ranges suggest RGB
-        if range_variability < 0.2:
-            return 1.0
-        if range_variability < 0.4:
-            return 0.5
+    # Use epsilon guard to avoid division by zero
+    range_variability = np.std(ranges) / (mean_range + EPSILON)
+    # Very similar ranges suggest RGB
+    if range_variability < RANGE_VARIABILITY_LOW:
+        return 1.0
+    if range_variability < RANGE_VARIABILITY_MODERATE:
+        return 0.5
     return 0.0
 
 
@@ -118,18 +141,18 @@ def _check_statistical_similarity(arr: NDArray[np.number]) -> float:
     score = 0.0
 
     # Check if means are reasonably similar (not too different)
-    if np.mean(means) > 0:
-        mean_cv = np.std(means) / np.mean(means)  # Coefficient of variation
-        if mean_cv < 0.3:  # Means are quite similar
-            score += 1.0
-        elif mean_cv > 1.0:  # Means are very different
-            score -= 1.0
+    # Use epsilon guard to avoid division by zero
+    mean_cv = np.std(means) / (np.mean(means) + EPSILON)  # Coefficient of variation
+    if mean_cv < COEFFICIENT_VARIATION_LOW:  # Means are quite similar
+        score += 1.0
+    elif mean_cv > COEFFICIENT_VARIATION_HIGH:  # Means are very different
+        score -= 1.0
 
     # Check if standard deviations are similar
-    if np.mean(stds) > 0:
-        std_cv = np.std(stds) / np.mean(stds)
-        if std_cv < 0.3:  # Standard deviations are similar
-            score += 0.5
+    # Use epsilon guard to avoid division by zero
+    std_cv = np.std(stds) / (np.mean(stds) + EPSILON)
+    if std_cv < COEFFICIENT_VARIATION_LOW:  # Standard deviations are similar
+        score += 0.5
 
     return score
 
@@ -143,9 +166,9 @@ def _check_batch_like_patterns(arr: NDArray[np.number]) -> float:
         hist2 = np.histogram(arr[2], bins=20, range=(arr.min(), arr.max()))[0]
 
         # Normalize histograms
-        hist0 = hist0 / (np.sum(hist0) + 1e-8)
-        hist1 = hist1 / (np.sum(hist1) + 1e-8)
-        hist2 = hist2 / (np.sum(hist2) + 1e-8)
+        hist0 = hist0 / (np.sum(hist0) + EPSILON)
+        hist1 = hist1 / (np.sum(hist1) + EPSILON)
+        hist2 = hist2 / (np.sum(hist2) + EPSILON)
 
         # Calculate histogram differences (chi-squared like)
         diff_01 = np.sum((hist0 - hist1) ** 2)
@@ -154,7 +177,7 @@ def _check_batch_like_patterns(arr: NDArray[np.number]) -> float:
 
         avg_hist_diff = (diff_01 + diff_02 + diff_12) / 3
         # Very different histograms suggest batch
-        if avg_hist_diff > 0.1:
+        if avg_hist_diff > HISTOGRAM_DIFF_THRESHOLD:
             return -1.0
     except (ValueError, TypeError, np.linalg.LinAlgError):
         pass
@@ -169,11 +192,11 @@ def _check_channel_distinctiveness(arr: NDArray[np.number]) -> float:
         channel_mins = [arr[i].min() for i in range(3)]
 
         # If all channels have very similar min/max, might be batch with similar content
-        max_similarity = np.std(channel_maxes) / (np.mean(channel_maxes) + 1e-8)
-        min_similarity = np.std(channel_mins) / (np.mean(channel_mins) + 1e-8)
+        max_similarity = np.std(channel_maxes) / (np.mean(channel_maxes) + EPSILON)
+        min_similarity = np.std(channel_mins) / (np.mean(channel_mins) + EPSILON)
 
         # RGB should have some variation in channel extremes
-        if max_similarity > 0.1 or min_similarity > 0.1:
+        if max_similarity > CHANNEL_DISTINCTIVENESS_THRESHOLD or min_similarity > CHANNEL_DISTINCTIVENESS_THRESHOLD:
             return 0.5
     except (ValueError, TypeError, ZeroDivisionError):
         pass
@@ -214,7 +237,7 @@ def _ambiguous_3d_format_detection(arr: NDArray[np.number]) -> str:
     )
 
     # Decision: require strong evidence for RGB interpretation
-    return "rgb" if rgb_score >= 2 else "batch"
+    return "rgb" if rgb_score >= RGB_SCORE_THRESHOLD else "batch"
 
 
 def detect_4d_array_format(arr: NDArray[np.number]) -> Array4DFormat:
@@ -299,11 +322,11 @@ def _check_correlation_heuristics(bchw_avg_corr: float, cbhw_avg_corr: float) ->
     cbhw_score = 0.0
 
     # Heuristic 2: Very high CBHW correlation with low BCHW correlation suggests CBHW
-    if cbhw_avg_corr > 0.98 and bchw_avg_corr < 0.3:
+    if cbhw_avg_corr > CBHW_CORRELATION_VERY_HIGH and bchw_avg_corr < CORRELATION_MODERATE_THRESHOLD:
         cbhw_score += 4  # Strong evidence for CBHW
 
     # Heuristic 3: Moderate BCHW correlation suggests natural RGB images
-    if 0.2 < bchw_avg_corr < 0.95:
+    if RANGE_VARIABILITY_LOW < bchw_avg_corr < CORRELATION_VERY_HIGH_THRESHOLD:
         bchw_score += 2  # Evidence for BCHW (natural RGB images)
 
     return bchw_score, cbhw_score
@@ -325,11 +348,11 @@ def _check_reverse_correlation_pattern(arr: NDArray[np.number], cbhw_avg_corr: f
     # If CBHW RGB correlation is significantly higher than within-channel correlation,
     # this suggests CBHW format
     corr_diff = cbhw_rgb_avg_corr - cbhw_avg_corr
-    if corr_diff > 0.5:  # Very strong evidence
+    if corr_diff > CORR_DIFF_VERY_STRONG:  # Very strong evidence
         return 6.0  # Override default BCHW preference
-    if corr_diff > 0.2:  # Strong evidence
+    if corr_diff > CORR_DIFF_STRONG:  # Strong evidence
         return 4.0  # Strong evidence for CBHW
-    if corr_diff > 0.05:  # Moderate evidence
+    if corr_diff > CORR_DIFF_MODERATE:  # Moderate evidence
         return 2.0  # Moderate evidence for CBHW
     return 0.0
 
@@ -345,7 +368,7 @@ def _check_rgb_like_structure(arr: NDArray[np.number]) -> float:
         # RGB channels often have different means and similar stds
         if len(set(np.round(means, 1))) > 1:  # Different means
             rgb_like_count += 1
-        if np.std(stds) / (np.mean(stds) + 1e-8) < 0.5:  # Similar standard deviations
+        if np.std(stds) / (np.mean(stds) + EPSILON) < STD_RATIO_THRESHOLD:  # Similar standard deviations
             rgb_like_count += 1
 
     # Strong evidence of RGB-like structure
@@ -361,12 +384,12 @@ def _check_cbhw_similarity_pattern(arr: NDArray[np.number]) -> float:
                 # Simple structural similarity: compare histograms
                 hist1 = np.histogram(arr[c, b1], bins=10, range=(arr.min(), arr.max()))[0]
                 hist2 = np.histogram(arr[c, b2], bins=10, range=(arr.min(), arr.max()))[0]
-                hist1 = hist1 / (np.sum(hist1) + 1e-8)
-                hist2 = hist2 / (np.sum(hist2) + 1e-8)
+                hist1 = hist1 / (np.sum(hist1) + EPSILON)
+                hist2 = hist2 / (np.sum(hist2) + EPSILON)
 
                 # High histogram similarity suggests same content (CBHW pattern)
                 similarity = 1 - np.sum(np.abs(hist1 - hist2)) / 2
-                if similarity > 0.8:
+                if similarity > HISTOGRAM_SIMILARITY_THRESHOLD:
                     cbhw_similarity_score += 1
 
     # Very similar content across "channels"
