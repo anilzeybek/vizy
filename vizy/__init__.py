@@ -78,23 +78,32 @@ def _is_sequence_of_tensors(x: TensorLike | Sequence[TensorLike]) -> bool:
     return True
 
 
+def _array_hw(arr: NDArray[np.number]) -> tuple[int, int]:
+    if arr.ndim == 2:
+        return arr.shape[0], arr.shape[1]
+    if arr.ndim == 3:
+        if arr.shape[0] in (1, 3):
+            return arr.shape[1], arr.shape[2]
+        return arr.shape[0], arr.shape[1]
+    raise ValueError(f"Expected 2D or 3D arrays, got {arr.ndim}D")
+
+
+def _array_padding(arr: NDArray[np.number], pad_h: int, pad_w: int) -> tuple[tuple[int, int], ...]:
+    if arr.ndim == 2:
+        return ((0, pad_h), (0, pad_w))
+    if arr.ndim == 3:
+        if arr.shape[0] in (1, 3):
+            return ((0, 0), (0, pad_h), (0, pad_w))
+        return ((0, pad_h), (0, pad_w), (0, 0))
+    raise ValueError(f"Expected 2D or 3D array for padding, got {arr.ndim}D")
+
+
 def _pad_to_common_size(numpy_arrays: list[NDArray[np.number]]) -> list[NDArray[np.number]]:
     """Pad numpy arrays to have the same height and width dimensions."""
     if len(numpy_arrays) == 0:
         return numpy_arrays
 
-    hw_pairs: list[tuple[int, int]] = []
-    for arr in numpy_arrays:
-        if arr.ndim == 2:
-            h, w = arr.shape
-        elif arr.ndim == 3:
-            if arr.shape[0] in (1, 3):
-                h, w = arr.shape[1], arr.shape[2]
-            else:  # HWC format
-                h, w = arr.shape[0], arr.shape[1]
-        else:
-            raise ValueError(f"Expected 2D or 3D arrays, got {arr.ndim}D")
-        hw_pairs.append((h, w))
+    hw_pairs = [_array_hw(arr) for arr in numpy_arrays]
 
     max_h = max(h for h, _ in hw_pairs)
     max_w = max(w for _, w in hw_pairs)
@@ -103,17 +112,7 @@ def _pad_to_common_size(numpy_arrays: list[NDArray[np.number]]) -> list[NDArray[
     for arr, (h, w) in zip(numpy_arrays, hw_pairs, strict=True):
         pad_h = max_h - h
         pad_w = max_w - w
-
-        if arr.ndim == 2:
-            padded_arr = np.pad(arr, ((0, pad_h), (0, pad_w)), mode="constant", constant_values=0)
-        elif arr.ndim == 3:
-            if arr.shape[0] in (1, 3):  # CHW format
-                padded_arr = np.pad(arr, ((0, 0), (0, pad_h), (0, pad_w)), mode="constant", constant_values=0)
-            else:  # HWC format
-                padded_arr = np.pad(arr, ((0, pad_h), (0, pad_w), (0, 0)), mode="constant", constant_values=0)
-        else:
-            raise ValueError(f"Expected 2D or 3D array for padding, got {arr.ndim}D")
-
+        padded_arr = np.pad(arr, _array_padding(arr, pad_h, pad_w), mode="constant", constant_values=0)
         padded_arrays.append(padded_arr)
     return padded_arrays
 
