@@ -21,6 +21,7 @@ import math
 import os
 import tempfile
 from collections.abc import Sequence
+from importlib import import_module
 from typing import TYPE_CHECKING, cast
 
 import numpy as np
@@ -29,13 +30,15 @@ from PIL import Image
 
 from vizy import format_detection
 
+torch: ModuleType | None
 try:
-    import torch
+    torch = import_module("torch")
 except ModuleNotFoundError:
     torch = None
 
+jax: ModuleType | None
 try:
-    import jax
+    jax = import_module("jax")
 except ModuleNotFoundError:
     jax = None
 
@@ -44,6 +47,8 @@ __all__: Sequence[str] = ("plot", "save", "summary")
 __version__: str = "1.4.0"
 
 if TYPE_CHECKING:
+    from types import ModuleType
+
     import jax as _jax_mod
     import torch as _torch_mod
 
@@ -122,7 +127,7 @@ def _single_to_numpy(x: TensorLike) -> NDArray[np.number]:
     if isinstance(x, Image.Image):
         return np.array(x)
     if isinstance(x, np.ndarray):
-        return x
+        return cast(NDArray[np.number], x)
     raise TypeError(f"Unsupported type: {type(x)}, expected torch.Tensor | jax.Array | np.ndarray | PIL.Image")
 
 
@@ -414,7 +419,7 @@ def _get_tensor_info(item: TensorLike) -> tuple[str, str, NDArray[np.number], st
     if isinstance(item, np.ndarray):
         item_type = "numpy.ndarray"
         device_info = ""
-        arr = item
+        arr = cast(NDArray[np.number], item)
         dtype_str = str(item.dtype)
         return item_type, device_info, arr, dtype_str
     return None

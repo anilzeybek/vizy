@@ -56,7 +56,7 @@ dev = [
     "jax",
     "Pillow",
     "imagehash>=4.3.2",
-    "basedpyright>=1.10.0",
+    "ty>=0.0.35",
     "ipykernel>=7.1.0",
 ]
 
@@ -80,12 +80,6 @@ lint.ignore = [
     "RET504"
 ]
 
-[tool.basedpyright]
-typeCheckingMode = "standard"
-pythonVersion = "3.12"
-
-reportUnknownMemberType = false
-reportUnknownVariableType = false
-
-exclude = ["**/tests/**", "**/test_*.py", "**/__pycache__/**", "**/dist/**", "**/build/**"]
-include = ["vizy/**/*.py"]
+[tool.ty]
+src.include = ["vizy"]
+src.exclude = ["**/__pycache__/**", "**/dist/**", "**/build/**"]
