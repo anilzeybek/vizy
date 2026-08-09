@@ -44,7 +44,7 @@ except ModuleNotFoundError:
 
 
 __all__: Sequence[str] = ("plot", "save", "summary")
-__version__: str = "1.4.0"
+__version__: str = "1.5"
 
 if TYPE_CHECKING:
     from types import ModuleType
