@@ -1,8 +1,10 @@
+
+
 # vizy: One-line tensor visualization for PyTorch, JAX and NumPy
 
 **Stop juggling tensor formats. Just visualize.**
 
-Display or save any NumPy array, PyTorch tensor, or JAX array (supports 2D, 3D, 4D shapes) with a single line:
+Display or save any NumPy array, PyTorch tensor, JAX array, PIL Image, or sequence of these (supports 2D, 3D, 4D shapes) with a single line:
 
 ```python
 import vizy
