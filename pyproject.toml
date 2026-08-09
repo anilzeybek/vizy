@@ -50,35 +50,23 @@ exclude = [
 
 [dependency-groups]
 dev = [
-    "ruff>=0.11.11",
+    "ruff>=0.16.2",
     "pytest>=7.0.0",
     "torch",
     "jax",
     "Pillow",
     "imagehash>=4.3.2",
-    "ty>=0.0.35",
+    "ty>=0.0.69",
     "ipykernel>=7.1.0",
 ]
 
 [tool.ruff]
 line-length = 120
-lint.select = ["ALL"]
-lint.ignore = [
-    "COM812",
-    "EM101",
-    "EM102",
-    "D100",
-    "TRY003",
-    "S101",
-    "TC006",
-    "PLR2004",
-    "T201",
-    "D103",
-    "D104",
-    "D203",
-    "D213",
-    "RET504"
-]
+
+[tool.ruff.format]
+# ruff >= 0.16 formats Python code blocks inside Markdown by default, which
+# collapses hand-aligned comments (e.g. in README.md). Keep Markdown untouched.
+exclude = ["*.md"]
 
 [tool.ty]
 src.include = ["vizy"]
