@@ -13,6 +13,12 @@ vizy.save(tensor)               # saves to temp file and prints path
 vizy.summary(tensor)            # prints info like res, dtype, device, range, etc.
 ```
 
+Pass multiple tensors to save or display them as a single grid image:
+
+```python
+vizy.save("grid.png", tensor1, tensor2, tensor3)
+```
+
 Let's say you have a PyTorch `tensor` or JAX `array` with shape `(BS, 3, H, W)`. Instead of
 
 ```python

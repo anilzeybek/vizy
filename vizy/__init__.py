@@ -319,19 +319,32 @@ def _tensor_to_pil_image(tensor: TensorLike | Sequence[TensorLike]) -> Image.Ima
     return _numpy_to_pil_image(plottable_numpy_arr)
 
 
-def plot(tensor: TensorLike | Sequence[TensorLike]) -> None:
-    """Display *tensor* using PIL/Pillow (opens system image viewer).
+def _combine_tensors(
+    tensors: tuple[TensorLike | Sequence[TensorLike], ...],
+) -> TensorLike | Sequence[TensorLike]:
+    """Collapse variadic tensor arguments into a single tensor or sequence."""
+    if not tensors:
+        raise TypeError("at least one tensor argument is required")
+    if len(tensors) == 1:
+        return tensors[0]
+    return cast(list[TensorLike], list(tensors))
+
+
+def plot(*tensors: TensorLike | Sequence[TensorLike]) -> None:
+    """Display one or more tensors using PIL/Pillow (opens system image viewer).
 
     In Jupyter notebooks, displays inline. Otherwise, opens system image viewer.
 
     Parameters
     ----------
-    tensor : torch.Tensor | jax.Array | np.ndarray | PIL.Image | sequence of these
-        Image tensor of shape (*, H, W) or (*, C, H, W), PIL Image, or a
-        list/tuple of 2D/3D tensors. For lists with mismatched dimensions,
-        images will be padded to the largest size.
+    *tensors : torch.Tensor | jax.Array | np.ndarray | PIL.Image | sequence of these
+        One or more image tensors of shape (*, H, W) or (*, C, H, W), PIL Images,
+        or a single list/tuple of 2D/3D tensors. Multiple positional tensors are
+        combined into a grid. For tensors with mismatched dimensions, images
+        will be padded to the largest size.
 
     """
+    tensor = _combine_tensors(tensors)
     pil_image = _tensor_to_pil_image(tensor)
 
     # Check if we're in a Jupyter notebook environment
@@ -352,22 +365,26 @@ def plot(tensor: TensorLike | Sequence[TensorLike]) -> None:
 
 def save(
     path_or_tensor: str | TensorLike | Sequence[TensorLike],
-    tensor: TensorLike | Sequence[TensorLike] | None = None,
+    *tensors: TensorLike | Sequence[TensorLike],
 ) -> str:
-    """Save *tensor* to *path*.
+    """Save one or more tensors to *path*.
 
-    Two call styles are supported::
+    Several call styles are supported::
 
         save('img.png', tensor)
-        save(tensor)  # auto tmp path
+        save('img.png', tensor1, tensor2, tensor3)  # combined into a grid
+        save('img.png', [tensor1, tensor2])         # list form also works
+        save(tensor)                                # auto tmp path
 
     Parameters
     ----------
     path_or_tensor :
-        Destination path or tensor (if path omitted).
-    tensor : torch.Tensor | jax.Array | np.ndarray | PIL.Image | sequence of these | None
-        Tensor to save, or None if tensor is first positional argument.
-        For lists with mismatched dimensions, images will be padded to the largest size.
+        Destination path, or tensor (if path omitted).
+    *tensors :
+        One or more tensors to save, or a single sequence of tensors. When the
+        first argument is a path, at least one tensor is required. Multiple
+        positional tensors are combined into a grid. For tensors with
+        mismatched dimensions, images will be padded to the largest size.
 
     Returns
     -------
@@ -375,14 +392,15 @@ def save(
         Resolved file path.
 
     """
-    if tensor is None:
-        if isinstance(path_or_tensor, str):
-            raise TypeError("tensor argument is required when first argument is a path string")
-        tensor, path = path_or_tensor, None
-    else:
+    if tensors:
         if not isinstance(path_or_tensor, str):
             raise TypeError("first argument must be a path string when tensor argument is provided")
         path = path_or_tensor
+        tensor = _combine_tensors(tensors)
+    else:
+        if isinstance(path_or_tensor, str):
+            raise TypeError("tensor argument is required when first argument is a path string")
+        tensor, path = path_or_tensor, None
 
     if path is None:
         fd, path = tempfile.mkstemp(suffix=".png", prefix="vizy-")
@@ -478,15 +496,17 @@ def _summary_single(tensor: TensorLike) -> None:
         print("Range: N/A (empty array)")
 
 
-def summary(tensor: TensorLike | Sequence[TensorLike]) -> None:
-    """Print summary information about a tensor or array.
+def summary(*tensors: TensorLike | Sequence[TensorLike]) -> None:
+    """Print summary information about one or more tensors or arrays.
 
     Parameters
     ----------
-    tensor : torch.Tensor | jax.Array | np.ndarray | PIL.Image | sequence of these
-        Tensor, array, PIL Image, or list/tuple of these to summarize.
+    *tensors : torch.Tensor | jax.Array | np.ndarray | PIL.Image | sequence of these
+        One or more tensors, arrays, PIL Images, or a single list/tuple of these
+        to summarize.
 
     """
+    tensor = _combine_tensors(tensors)
     if _is_sequence_of_tensors(tensor):
         _summary_sequence(cast(Sequence[TensorLike], tensor))
     else:

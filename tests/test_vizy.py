@@ -443,6 +443,27 @@ class TestSave:
             if Path(tmp_path).exists():
                 Path(tmp_path).unlink()
 
+    def test_save_variadic_tensors(self) -> None:
+        """Test saving multiple tensors passed as separate positional arguments."""
+        rng = np.random.default_rng(42)
+        arr1 = rng.random((32, 32))
+        arr2 = rng.random((32, 32))
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            tmp_path = tmp.name
+
+        try:
+            with patch("builtins.print") as mock_print:
+                result_path = vizy.save(tmp_path, arr1, arr2)
+            assert result_path == tmp_path
+            assert Path(tmp_path).exists()
+            # Grid of 2 images -> width doubled
+            with Image.open(tmp_path) as img:
+                assert img.size[0] == 64
+            mock_print.assert_called_once_with(tmp_path)
+        finally:
+            if Path(tmp_path).exists():
+                Path(tmp_path).unlink()
+
     def test_save_auto_path(self) -> None:
         """Test saving with automatic path generation."""
         rng = np.random.default_rng(42)
@@ -585,6 +606,19 @@ class TestSummary:
         with pytest.raises(TypeError, match="Expected torch.Tensor | np.ndarray"):
             vizy.summary("invalid_string")  # type: ignore[arg-type]
 
+    def test_summary_variadic_tensors(self) -> None:
+        """Test summary for multiple tensors passed as separate positional arguments."""
+        rng = np.random.default_rng(42)
+        arr1 = rng.integers(0, 256, size=(32, 32), dtype=np.uint8)
+        arr2 = rng.integers(0, 256, size=(32, 32), dtype=np.uint8)
+
+        with patch("builtins.print") as mock_print:
+            vizy.summary(arr1, arr2)
+
+        calls = [call.args[0] for call in mock_print.call_args_list]
+        assert any("Sequence" in call for call in calls)
+        assert any("of 2 tensors" in call for call in calls)
+
 
 class TestNumpyToPilImage:
     """Test the _numpy_to_pil_image function."""
@@ -721,6 +755,15 @@ class TestPlot:
         arr2 = rng.random((32, 32))
         with patch("PIL.Image.Image.show") as mock_show:
             vizy.plot([arr1, arr2])
+        mock_show.assert_called_once()
+
+    def test_plot_variadic_tensors(self) -> None:
+        """Test plotting multiple tensors passed as separate positional arguments."""
+        rng = np.random.default_rng(42)
+        arr1 = rng.random((32, 32))
+        arr2 = rng.random((32, 32))
+        with patch("PIL.Image.Image.show") as mock_show:
+            vizy.plot(arr1, arr2)
         mock_show.assert_called_once()
 
     def test_plot_jupyter_inline_display(self) -> None:
