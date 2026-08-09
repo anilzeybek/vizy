@@ -194,7 +194,7 @@ def _normalize_array_format(numpy_arr: NDArray[np.number]) -> tuple[NDArray[np.n
     raise ValueError(f"Cannot prepare array with {numpy_arr.ndim} dimensions")
 
 
-def _make_grid(numpy_arr: NDArray[np.number]) -> NDArray[np.number]:
+def _make_grid(numpy_arr: NDArray[np.number], sep: int = 0) -> NDArray[np.number]:
     """Make grid image from BHWC/BHW array.
 
     Arranges multiple images in a grid layout with the following properties:
@@ -203,7 +203,10 @@ def _make_grid(numpy_arr: NDArray[np.number]) -> NDArray[np.number]:
     - 4 images arranged in a 2x2 grid
     - Larger batches arranged in a roughly square grid
     - Maintains original image dimensions and channels
-    - Uses black background for empty grid positions
+    - Uses a high-contrast background for empty grid positions
+    - Inserts *sep*-pixel gaps between images when sep > 0, drawn in a color
+      that contrasts with the images (white for dark content, black for light
+      content)
     """
     if numpy_arr.ndim == 4:
         b, h, w, c = numpy_arr.shape
@@ -226,14 +229,41 @@ def _make_grid(numpy_arr: NDArray[np.number]) -> NDArray[np.number]:
         grid_cols = math.ceil(math.sqrt(b))
         grid_rows = math.ceil(b / grid_cols)
 
-    # canvas initialised to zeros (black background)
-    canvas = np.zeros((h * grid_rows, w * grid_cols, c), dtype=numpy_arr.dtype)
+    sep = max(sep, 0)
+
+    # Pick a high-contrast background/separator color from the average image
+    # brightness: white when the images are dark, black when they are light.
+    # `scale_max` is the value that maps to full brightness for this dtype
+    # (1.0 for normalized floats, 255 otherwise).
+    if numpy_arr.dtype.kind == "f" and numpy_arr.max() <= 1.0:
+        scale_max: float = 1.0
+    else:
+        scale_max = 255.0
+
+    if sep > 0 and float(numpy_arr.mean()) <= scale_max / 2:
+        bg_value: float = scale_max  # dark images -> white separator
+    else:
+        bg_value = 0.0  # light images -> black separator
+
+    # Clamp the background value to what the array dtype can actually hold.
+    if numpy_arr.dtype.kind in "iu":
+        info = np.iinfo(numpy_arr.dtype.name)
+        if bg_value > 0:
+            bg_value = min(float(info.max), bg_value)
+        else:
+            bg_value = float(info.min)
+
+    canvas_h = h * grid_rows + sep * (grid_rows - 1)
+    canvas_w = w * grid_cols + sep * (grid_cols - 1)
+    canvas = np.full((canvas_h, canvas_w, c), bg_value, dtype=numpy_arr.dtype)
     for idx in range(b):
         row, col = divmod(idx, grid_cols)
         img = numpy_arr[idx]
         if img.ndim == 2:
             img = img[..., np.newaxis]
-        canvas[row * h : (row + 1) * h, col * w : (col + 1) * w, :] = img
+        y0 = row * (h + sep)
+        x0 = col * (w + sep)
+        canvas[y0 : y0 + h, x0 : x0 + w, :] = img
     return canvas
 
 
@@ -283,10 +313,10 @@ def _force_np_arr_to_int_arr(numpy_arr: NDArray[np.number]) -> NDArray[np.uint8]
     raise ValueError(f"Unsupported dtype for conversion to uint8: {numpy_arr.dtype}")
 
 
-def _to_plottable_int_arr(numpy_arr: NDArray[np.number]) -> NDArray[np.uint8]:
+def _to_plottable_int_arr(numpy_arr: NDArray[np.number], sep: int = 0) -> NDArray[np.uint8]:
     numpy_arr, requires_grid = _normalize_array_format(numpy_arr)
     if requires_grid:
-        numpy_arr = _make_grid(numpy_arr)
+        numpy_arr = _make_grid(numpy_arr, sep=sep)
     return _force_np_arr_to_int_arr(numpy_arr)
 
 
@@ -311,11 +341,11 @@ def _numpy_to_pil_image(numpy_arr: NDArray[np.uint8]) -> Image.Image:
     raise ValueError(f"Unsupported array dimensions: {numpy_arr.ndim}")
 
 
-def _tensor_to_pil_image(tensor: TensorLike | Sequence[TensorLike]) -> Image.Image:
+def _tensor_to_pil_image(tensor: TensorLike | Sequence[TensorLike], sep: int = 0) -> Image.Image:
     numpy_arr = _to_numpy(tensor)
     if not np.all(np.isfinite(numpy_arr)):
         raise ValueError("Cannot plot array with NaN or infinity values")
-    plottable_numpy_arr = _to_plottable_int_arr(numpy_arr)
+    plottable_numpy_arr = _to_plottable_int_arr(numpy_arr, sep=sep)
     return _numpy_to_pil_image(plottable_numpy_arr)
 
 
@@ -330,7 +360,7 @@ def _combine_tensors(
     return cast(list[TensorLike], list(tensors))
 
 
-def plot(*tensors: TensorLike | Sequence[TensorLike]) -> None:
+def plot(*tensors: TensorLike | Sequence[TensorLike], sep: int = 0) -> None:
     """Display one or more tensors using PIL/Pillow (opens system image viewer).
 
     In Jupyter notebooks, displays inline. Otherwise, opens system image viewer.
@@ -342,10 +372,15 @@ def plot(*tensors: TensorLike | Sequence[TensorLike]) -> None:
         or a single list/tuple of 2D/3D tensors. Multiple positional tensors are
         combined into a grid. For tensors with mismatched dimensions, images
         will be padded to the largest size.
+    sep : int
+        Pixel width of gaps drawn between images when more than one image
+        is shown as a grid. The gap color is chosen automatically to contrast
+        with the images (white for dark content, black for light content).
+        Defaults to 0 (no gap).
 
     """
     tensor = _combine_tensors(tensors)
-    pil_image = _tensor_to_pil_image(tensor)
+    pil_image = _tensor_to_pil_image(tensor, sep=sep)
 
     # Check if we're in a Jupyter notebook environment
     try:
@@ -366,6 +401,7 @@ def plot(*tensors: TensorLike | Sequence[TensorLike]) -> None:
 def save(
     path_or_tensor: str | TensorLike | Sequence[TensorLike],
     *tensors: TensorLike | Sequence[TensorLike],
+    sep: int = 0,
 ) -> str:
     """Save one or more tensors to *path*.
 
@@ -385,6 +421,11 @@ def save(
         first argument is a path, at least one tensor is required. Multiple
         positional tensors are combined into a grid. For tensors with
         mismatched dimensions, images will be padded to the largest size.
+    sep : int
+        Pixel width of gaps drawn between images when more than one image
+        is saved as a grid. The gap color is chosen automatically to contrast
+        with the images (white for dark content, black for light content).
+        Defaults to 0 (no gap).
 
     Returns
     -------
@@ -406,7 +447,7 @@ def save(
         fd, path = tempfile.mkstemp(suffix=".png", prefix="vizy-")
         os.close(fd)
 
-    pil_image = _tensor_to_pil_image(tensor)
+    pil_image = _tensor_to_pil_image(tensor, sep=sep)
     pil_image.save(path)
 
     print(path)

@@ -464,6 +464,46 @@ class TestSave:
             if Path(tmp_path).exists():
                 Path(tmp_path).unlink()
 
+    def test_save_variadic_tensors_with_separator(self) -> None:
+        """Test saving multiple tensors with a separator gap between them."""
+        # Dark images -> the separator is drawn in white for contrast
+        arr1 = np.zeros((32, 32))
+        arr2 = np.zeros((32, 32))
+        arr1[8:24, 8:24] = 1.0
+        arr2[8:24, 8:24] = 1.0
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            tmp_path = tmp.name
+
+        try:
+            with patch("builtins.print"):
+                vizy.save(tmp_path, arr1, arr2, sep=4)
+            with Image.open(tmp_path) as img:
+                assert img.size == (68, 32)  # 2*32 + 4 separator
+                # The 4-pixel gap between the two images must be white
+                gap = np.asarray(img.convert("L"))[:, 32:36]
+                assert np.all(gap == 255)
+        finally:
+            if Path(tmp_path).exists():
+                Path(tmp_path).unlink()
+
+    def test_save_batched_tensor_with_separator(self) -> None:
+        """Test saving a single batched tensor with a separator gap."""
+        tensor = torch.ones(2, 3, 32, 32)  # light images -> black separator
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            tmp_path = tmp.name
+
+        try:
+            with patch("builtins.print"):
+                vizy.save(tmp_path, tensor, sep=4)
+            with Image.open(tmp_path) as img:
+                assert img.size == (68, 32)  # 2*32 + 4 separator
+                # The 4-pixel gap between the two images must be black
+                gap = np.asarray(img.convert("L"))[:, 32:36]
+                assert np.all(gap == 0)
+        finally:
+            if Path(tmp_path).exists():
+                Path(tmp_path).unlink()
+
     def test_save_auto_path(self) -> None:
         """Test saving with automatic path generation."""
         rng = np.random.default_rng(42)
@@ -764,6 +804,15 @@ class TestPlot:
         arr2 = rng.random((32, 32))
         with patch("PIL.Image.Image.show") as mock_show:
             vizy.plot(arr1, arr2)
+        mock_show.assert_called_once()
+
+    def test_plot_variadic_tensors_with_separator(self) -> None:
+        """Test plotting multiple tensors with a separator gap."""
+        rng = np.random.default_rng(42)
+        arr1 = rng.random((32, 32))
+        arr2 = rng.random((32, 32))
+        with patch("PIL.Image.Image.show") as mock_show:
+            vizy.plot(arr1, arr2, sep=2)
         mock_show.assert_called_once()
 
     def test_plot_jupyter_inline_display(self) -> None:
